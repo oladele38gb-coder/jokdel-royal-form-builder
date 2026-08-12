@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { FormConfig } from '../types';
-import { Shield, ChevronDown, FileText, Phone, Home, Layers } from 'lucide-react';
+import { ChevronDown, FileText, Phone, Home, Layers } from 'lucide-react';
 
 interface HeaderProps {
   forms: FormConfig[];
   selectedFormId: string | null;
   onSelectForm: (formId: string | null) => void;
-  onOpenAdmin: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   forms,
   selectedFormId,
   onSelectForm,
-  onOpenAdmin,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const activeForms = forms.filter((f) => f.isActive);
@@ -103,14 +101,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span>+234 803 456 7890</span>
           </a>
 
-          {/* Staff / Admin Portal Link */}
-          <button
-            onClick={onOpenAdmin}
-            className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-white bg-[#1D3557] hover:bg-[#162744] px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-lg shadow-2xs transition-colors"
-          >
-            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C5A059]" />
-            <span>Admin CRM</span>
-          </button>
         </div>
       </div>
     </header>
