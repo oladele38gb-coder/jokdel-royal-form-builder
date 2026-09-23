@@ -61,12 +61,8 @@ function useAppState() {
   const [forms, setForms] = useState<FormConfig[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.FORMS);
-      if (!saved) return INITIAL_FORMS;
-      const parsed: FormConfig[] = JSON.parse(saved);
-      const missingInitial = INITIAL_FORMS.filter(
-        (init) => !parsed.some((p) => p.id === init.id)
-      );
-      return missingInitial.length > 0 ? [...parsed, ...missingInitial] : parsed;
+      if (saved) return JSON.parse(saved);
+      return INITIAL_FORMS;
     } catch { return INITIAL_FORMS; }
   });
 
@@ -187,12 +183,41 @@ function useAppState() {
     } catch { console.warn('API offline — note saved locally only.'); }
   };
 
+  const handleDeleteResponse = async (responseId: string) => {
+    setResponses((prev) => prev.filter((r) => r.id !== responseId));
+    if (selectedResponseDetail?.id === responseId) {
+      setSelectedResponseDetail(null);
+    }
+    try {
+      await fetch(`${API_BASE}/responses/${responseId}`, { method: 'DELETE' });
+    } catch { console.warn('API offline — deleted locally.'); }
+    try {
+      const saved = localStorage.getItem('jokdel_responses_v3');
+      if (saved) {
+        const parsed = JSON.parse(saved).filter((r: any) => r.id !== responseId);
+        localStorage.setItem('jokdel_responses_v3', JSON.stringify(parsed));
+      }
+    } catch {}
+  };
+
+  const handleClearAllResponses = async () => {
+    setResponses([]);
+    setSelectedResponseDetail(null);
+    try {
+      await fetch(`${API_BASE}/responses`, { method: 'DELETE' });
+    } catch { console.warn('API offline — cleared locally.'); }
+    try {
+      localStorage.removeItem('jokdel_responses_v3');
+    } catch {}
+  };
+
   const handleResetSampleData = () => {
     setForms(INITIAL_FORMS);
     setResponses([]);
     setSettings(INITIAL_COMPANY_SETTINGS);
     localStorage.removeItem(STORAGE_KEYS.FORMS);
     localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+    localStorage.removeItem('jokdel_responses_v3');
   };
 
   return {
@@ -206,7 +231,8 @@ function useAppState() {
     loadingResponses, fetchResponses,
     handleAdminLogin, handleAdminLogout,
     handleSaveForm, handleDuplicateForm, handleToggleFormActive, handleDeleteForm,
-    handleUpdateResponseStatus, handleAddResponseNote, handleResetSampleData,
+    handleUpdateResponseStatus, handleAddResponseNote,
+    handleDeleteResponse, handleClearAllResponses, handleResetSampleData,
   };
 }
 
@@ -283,12 +309,28 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
             companySettings={settings}
             onBackToHome={() => { setSelectedFormId(null); setActiveSubmittedResponse(null); }}
           />
-        ) : selectedFormObj ? (
+        ) : selectedFormObj && selectedFormObj.isActive ? (
           <DynamicForm
             form={selectedFormObj}
             onBack={() => setSelectedFormId(null)}
             onSubmit={handleFormSubmission}
           />
+        ) : selectedFormObj && !selectedFormObj.isActive ? (
+          <div className="py-20 px-4 text-center max-w-md mx-auto">
+            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
+              <span className="text-xl">🔒</span>
+            </div>
+            <h2 className="text-lg font-bold text-slate-800">Service Currently Unavailable</h2>
+            <p className="text-xs text-slate-500 mt-1 mb-5">
+              "{selectedFormObj.title}" is currently hidden from the public website by administration.
+            </p>
+            <button
+              onClick={() => setSelectedFormId(null)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#1B2A5C] hover:bg-slate-800 cursor-pointer"
+            >
+              ← Back to Available Services
+            </button>
+          </div>
         ) : (
           <PublicFormsList
             forms={forms}
@@ -327,7 +369,8 @@ function AdminPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
     forms, responses, settings, setSettings,
     handleAdminLogin, handleAdminLogout,
     handleSaveForm, handleDuplicateForm, handleToggleFormActive, handleDeleteForm,
-    handleUpdateResponseStatus, handleAddResponseNote, handleResetSampleData,
+    handleUpdateResponseStatus, handleAddResponseNote,
+    handleDeleteResponse, handleClearAllResponses, handleResetSampleData,
   } = appState;
 
   if (!adminUser || !adminUser.isAuthenticated) {
@@ -393,6 +436,8 @@ function AdminPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
           onAddNote={handleAddResponseNote}
           selectedResponseDetail={selectedResponseDetail}
           onSelectResponseDetail={setSelectedResponseDetail}
+          onDeleteResponse={handleDeleteResponse}
+          onClearAllResponses={handleClearAllResponses}
         />
       ) : (
         <AdminSettings

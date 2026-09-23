@@ -1,24 +1,4 @@
 {
-  "responses": [
-    {
-      "id": "JOK-2026-1001",
-      "submittedAt": "2026-09-23T09:53:28.360Z",
-      "status": "New",
-      "notes": [],
-      "formId": "form-kyc-engagement",
-      "formTitle": "KYC and Engagement Form",
-      "submitterName": "Oladele Akinyemi",
-      "submitterEmail": "oladele@jokdelroyal.com",
-      "submitterPhone": "0816 215 3670",
-      "fieldValues": {
-        "field-kyc-fullname": "Oladele Akinyemi",
-        "field-kyc-email": "oladele@jokdelroyal.com",
-        "field-kyc-phone": "0816 215 3670",
-        "field-kyc-address": "9, Association Avenue, Ilupeju, Lagos State",
-        "field-kyc-occupation": "Real Estate Director, Jokdel Royal Nig. Ltd",
-        "field-service-needed": "Property Management"
-      }
-    }
-  ],
+  "responses": [],
   "settings": {}
 }

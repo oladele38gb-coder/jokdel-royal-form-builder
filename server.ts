@@ -109,6 +109,27 @@ app.post('/api/responses/:id/notes', (req, res) => {
   res.json(db.responses[idx]);
 });
 
+// DELETE single response
+app.delete('/api/responses/:id', (req, res) => {
+  const db = readDB();
+  const initialLen = db.responses.length;
+  db.responses = db.responses.filter((r: any) => r.id !== req.params.id);
+  if (db.responses.length === initialLen) {
+    return res.status(404).json({ error: 'Response not found' });
+  }
+  writeDB(db);
+  res.json({ success: true, deletedId: req.params.id });
+});
+
+// DELETE all responses (Clear all)
+app.delete('/api/responses', (_req, res) => {
+  const db = readDB();
+  db.responses = [];
+  writeDB(db);
+  console.log('🗑️ All responses cleared');
+  res.json({ success: true, message: 'All responses cleared' });
+});
+
 // GET settings
 app.get('/api/settings', (_req, res) => {
   const db = readDB();
