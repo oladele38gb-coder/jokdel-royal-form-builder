@@ -19,6 +19,7 @@ interface AdminResponsesProps {
   onClearAllResponses?: () => void;
   onRefreshResponses?: () => void;
   isLoading?: boolean;
+  isFirebaseLive?: boolean;
 }
 
 export const AdminResponses: React.FC<AdminResponsesProps> = ({
@@ -34,6 +35,7 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
   onClearAllResponses,
   onRefreshResponses,
   isLoading,
+  isFirebaseLive,
 }) => {
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -248,7 +250,20 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
       {/* Header & Export Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
         <div>
-          <h1 className="font-serif text-xl font-bold" style={{ color: '#1B2A5C' }}>Responses & CRM Leads</h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="font-serif text-xl font-bold" style={{ color: '#1B2A5C' }}>Responses & CRM Leads</h1>
+            {isFirebaseLive ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Live Cloud Sync (Firebase)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Check Firestore rules or network connection">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                Local Storage Mode
+              </span>
+            )}
+          </div>
           <p className="text-xs mt-1" style={{ color: '#64748b' }}>
             Manage submissions, update client pipeline status and download letterhead PDFs.
           </p>

@@ -35,6 +35,16 @@ import { FormBuilder } from './components/admin/FormBuilder';
 import { AdminResponses } from './components/admin/AdminResponses';
 import { AdminSettings } from './components/admin/AdminSettings';
 
+// Firebase Real-Time Firestore Integration
+import {
+  subscribeToResponses,
+  saveResponseToFirestore,
+  updateResponseStatusInFirestore,
+  addResponseNoteInFirestore,
+  deleteResponseFromFirestore,
+  clearAllResponsesFromFirestore,
+} from './lib/firebase';
+
 const STORAGE_KEYS = {
   FORMS: 'jokdel_forms_v4',
   SETTINGS: 'jokdel_settings_v3',
@@ -172,6 +182,26 @@ function useAppState() {
     setForms((prev) => prev.filter((f) => f.id !== formId));
   };
 
+  const [firebaseLive, setFirebaseLive] = useState(false);
+
+  // Subscribe to real-time Cloud Firestore updates
+  useEffect(() => {
+    const unsubscribe = subscribeToResponses(
+      (liveList) => {
+        setFirebaseLive(true);
+        setResponses(liveList);
+        try {
+          localStorage.setItem('jokdel_responses_v3', JSON.stringify(liveList));
+        } catch {}
+      },
+      () => {
+        setFirebaseLive(false);
+        fetchResponses();
+      }
+    );
+    return () => unsubscribe();
+  }, [fetchResponses]);
+
   const handleUpdateResponseStatus = async (responseId: string, newStatus: ResponseStatus) => {
     const statusNote: StaffNote = {
       id: `note-${Date.now()}`,
@@ -179,17 +209,29 @@ function useAppState() {
       author: adminUser?.name || 'Staff Admin',
       content: `Pipeline status changed to "${newStatus}".`,
     };
+    const target = responses.find((r) => r.id === responseId);
+    const updatedNotes = target ? [...target.notes, statusNote] : [statusNote];
+
     // Optimistic update
-    setResponses((prev) => prev.map((r) => r.id !== responseId ? r : { ...r, status: newStatus, notes: [...r.notes, statusNote] }));
+    setResponses((prev) => prev.map((r) => r.id !== responseId ? r : { ...r, status: newStatus, notes: updatedNotes }));
     if (selectedResponseDetail?.id === responseId) {
-      setSelectedResponseDetail((prev) => prev ? { ...prev, status: newStatus, notes: [...prev.notes, statusNote] } : null);
+      setSelectedResponseDetail((prev) => prev ? { ...prev, status: newStatus, notes: updatedNotes } : null);
     }
+
+    // Sync to Firestore
+    try {
+      await updateResponseStatusInFirestore(responseId, newStatus, updatedNotes);
+    } catch (e) {
+      console.warn('Firestore status update error:', e);
+    }
+
+    // Also sync to local Express server if running
     try {
       await fetch(`${API_BASE}/responses/${responseId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-    } catch { console.warn('API offline — status update saved locally only.'); }
+    } catch {}
   };
 
   const handleAddResponseNote = async (responseId: string, noteContent: string) => {
@@ -199,16 +241,28 @@ function useAppState() {
       author: adminUser?.name || 'Staff Admin',
       content: noteContent,
     };
-    setResponses((prev) => prev.map((r) => r.id !== responseId ? r : { ...r, notes: [...r.notes, newNote] }));
+    const target = responses.find((r) => r.id === responseId);
+    const updatedNotes = target ? [...target.notes, newNote] : [newNote];
+
+    setResponses((prev) => prev.map((r) => r.id !== responseId ? r : { ...r, notes: updatedNotes }));
     if (selectedResponseDetail?.id === responseId) {
-      setSelectedResponseDetail((prev) => prev ? { ...prev, notes: [...prev.notes, newNote] } : null);
+      setSelectedResponseDetail((prev) => prev ? { ...prev, notes: updatedNotes } : null);
     }
+
+    // Sync to Firestore
+    try {
+      await addResponseNoteInFirestore(responseId, updatedNotes);
+    } catch (e) {
+      console.warn('Firestore note error:', e);
+    }
+
+    // Also sync to Express API
     try {
       await fetch(`${API_BASE}/responses/${responseId}/notes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: noteContent, author: adminUser?.name || 'Staff Admin' }),
       });
-    } catch { console.warn('API offline — note saved locally only.'); }
+    } catch {}
   };
 
   const handleDeleteResponse = async (responseId: string) => {
@@ -216,9 +270,18 @@ function useAppState() {
     if (selectedResponseDetail?.id === responseId) {
       setSelectedResponseDetail(null);
     }
+
+    // Delete from Firestore
+    try {
+      await deleteResponseFromFirestore(responseId);
+    } catch (e) {
+      console.warn('Firestore delete error:', e);
+    }
+
+    // Delete from Express API
     try {
       await fetch(`${API_BASE}/responses/${responseId}`, { method: 'DELETE' });
-    } catch { console.warn('API offline — deleted locally.'); }
+    } catch {}
     try {
       const saved = localStorage.getItem('jokdel_responses_v3');
       if (saved) {
@@ -231,9 +294,18 @@ function useAppState() {
   const handleClearAllResponses = async () => {
     setResponses([]);
     setSelectedResponseDetail(null);
+
+    // Clear from Firestore
+    try {
+      await clearAllResponsesFromFirestore();
+    } catch (e) {
+      console.warn('Firestore clear error:', e);
+    }
+
+    // Clear from Express API
     try {
       await fetch(`${API_BASE}/responses`, { method: 'DELETE' });
-    } catch { console.warn('API offline — cleared locally.'); }
+    } catch {}
     try {
       localStorage.removeItem('jokdel_responses_v3');
     } catch {}
@@ -256,7 +328,7 @@ function useAppState() {
     responsesStatusFilter, setResponsesStatusFilter,
     adminUser,
     forms, responses, setResponses, settings, setSettings,
-    loadingResponses, fetchResponses,
+    loadingResponses, fetchResponses, firebaseLive,
     handleAdminLogin, handleAdminLogout,
     handleSaveForm, handleDuplicateForm, handleToggleFormActive, handleDeleteForm,
     handleUpdateResponseStatus, handleAddResponseNote,
@@ -297,37 +369,39 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
       fieldValues: formData,
     };
 
-    let savedResponse: FormResponse | null = null;
+    const refNumber = Math.floor(1000 + Math.random() * 9000);
+    const newResponse: FormResponse = {
+      id: `JOK-${new Date().getFullYear()}-${refNumber}`,
+      submittedAt: new Date().toISOString(),
+      ...payload,
+    };
+
+    // 1. Save directly to Firebase Firestore for real-time cloud sync
     try {
-      const res = await fetch(`${API_BASE}/responses`, {
+      await saveResponseToFirestore(newResponse);
+    } catch (err) {
+      console.warn('Firestore submission error (check rules if permission denied):', err);
+    }
+
+    // 2. Also save to local Express server if running
+    try {
+      await fetch(`${API_BASE}/responses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(newResponse),
       });
-      if (res.ok) {
-        savedResponse = await res.json();
-      }
-    } catch {
-      console.warn('API offline — saving locally.');
-    }
+    } catch {}
 
-    if (!savedResponse) {
-      const refNumber = Math.floor(1000 + Math.random() * 9000);
-      savedResponse = {
-        id: `JOK-${new Date().getFullYear()}-${refNumber}`,
-        submittedAt: new Date().toISOString(),
-        ...payload,
-      };
-    }
-
+    // 3. Update local state & localStorage immediately
     setResponses((prev) => {
-      const updated = [savedResponse!, ...prev.filter((r) => r.id !== savedResponse!.id)];
+      const updated = [newResponse, ...prev.filter((r) => r.id !== newResponse.id)];
       try {
         localStorage.setItem('jokdel_responses_v3', JSON.stringify(updated));
       } catch {}
       return updated;
     });
-    setActiveSubmittedResponse(savedResponse);
+
+    setActiveSubmittedResponse(newResponse);
   };
 
   return (
@@ -476,6 +550,7 @@ function AdminPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
           onClearAllResponses={handleClearAllResponses}
           onRefreshResponses={fetchResponses}
           isLoading={loadingResponses}
+          isFirebaseLive={firebaseLive}
         />
       ) : (
         <AdminSettings
