@@ -65,16 +65,26 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
     'Not Interested',
   ];
 
-  // Filtering responses
-  const filteredResponses = responses.filter((res) => {
+  // Safe filtering of responses
+  const filteredResponses = (responses || []).filter((res) => {
+    if (!res || typeof res !== 'object') return false;
     const matchesForm = formFilter === 'All' || res.formId === formFilter;
     const matchesStatus = statusFilter === 'All' || res.status === statusFilter;
+    const searchLower = (searchQuery || '').toLowerCase().trim();
+    if (!searchLower) return matchesForm && matchesStatus;
+
+    const name = String(res.submitterName || '').toLowerCase();
+    const email = String(res.submitterEmail || '').toLowerCase();
+    const phone = String(res.submitterPhone || '').toLowerCase();
+    const id = String(res.id || '').toLowerCase();
+    const title = String(res.formTitle || '').toLowerCase();
+
     const matchesSearch =
-      res.submitterName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      res.submitterEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      res.submitterPhone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      res.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      res.formTitle.toLowerCase().includes(searchQuery.toLowerCase());
+      name.includes(searchLower) ||
+      email.includes(searchLower) ||
+      phone.includes(searchLower) ||
+      id.includes(searchLower) ||
+      title.includes(searchLower);
 
     return matchesForm && matchesStatus && matchesSearch;
   });
@@ -99,24 +109,28 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
     ];
 
     const rows = filteredResponses.map((r) => {
-      const summaryStr = Object.entries(r.fieldValues)
+      const fieldEntries = r.fieldValues && typeof r.fieldValues === 'object' ? Object.entries(r.fieldValues) : [];
+      const summaryStr = fieldEntries
         .map(([k, v]) => {
           if (v && typeof v === 'object' && !Array.isArray(v) && 'fileName' in v) {
-            return `${k}: Attachment (${(v as FileDataValue).fileName})`;
+            return `${k}: Attachment (${(v as FileDataValue).fileName || 'file'})`;
           }
-          return `${k}: ${Array.isArray(v) ? v.join(', ') : v}`;
+          return `${k}: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
         })
         .join(' | ');
 
+      const safeDate = r.submittedAt ? new Date(r.submittedAt).toLocaleString() : 'N/A';
+      const notesCount = Array.isArray(r.notes) ? r.notes.length : 0;
+
       return [
-        `"${r.id}"`,
-        `"${r.formTitle.replace(/"/g, '""')}"`,
-        `"${r.submitterName.replace(/"/g, '""')}"`,
-        `"${r.submitterEmail.replace(/"/g, '""')}"`,
-        `"${r.submitterPhone.replace(/"/g, '""')}"`,
-        `"${new Date(r.submittedAt).toLocaleString()}"`,
-        `"${r.status}"`,
-        `"${r.notes.length}"`,
+        `"${String(r.id || '').replace(/"/g, '""')}"`,
+        `"${String(r.formTitle || '').replace(/"/g, '""')}"`,
+        `"${String(r.submitterName || '').replace(/"/g, '""')}"`,
+        `"${String(r.submitterEmail || '').replace(/"/g, '""')}"`,
+        `"${String(r.submitterPhone || '').replace(/"/g, '""')}"`,
+        `"${safeDate}"`,
+        `"${String(r.status || 'New')}"`,
+        `"${notesCount}"`,
         `"${summaryStr.replace(/"/g, '""')}"`,
       ];
     });
@@ -375,87 +389,92 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {filteredResponses.map((res) => (
-                  <tr
-                    key={res.id}
-                    className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
-                    onClick={() => onSelectResponseDetail(res)}
-                  >
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-[#131B2E] text-sm group-hover:text-[#6E1E1E]">
-                        {res.submitterName}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-400">{res.id}</div>
-                    </td>
+                {filteredResponses.map((res) => {
+                  const submitDate = res.submittedAt ? new Date(res.submittedAt) : null;
+                  const isValidDate = submitDate && !isNaN(submitDate.getTime());
+                  const dateStr = isValidDate ? submitDate.toLocaleDateString() : '—';
+                  const timeStr = isValidDate ? submitDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-                    <td className="py-3.5 px-4">
-                      <div className="text-slate-800 font-medium">{res.submitterPhone}</div>
-                      <div className="text-slate-400 text-[11px] truncate max-w-[180px]">
-                        {res.submitterEmail}
-                      </div>
-                    </td>
+                  return (
+                    <tr
+                      key={res.id || Math.random().toString()}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                      onClick={() => onSelectResponseDetail(res)}
+                    >
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-[#131B2E] text-sm group-hover:text-[#6E1E1E]">
+                          {res.submitterName || 'Unnamed Lead'}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400">{res.id || 'N/A'}</div>
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      <span className="font-medium text-slate-800">{res.formTitle}</span>
-                    </td>
+                      <td className="py-3.5 px-4">
+                        <div className="text-slate-800 font-medium">{res.submitterPhone || '—'}</div>
+                        <div className="text-slate-400 text-[11px] truncate max-w-[180px]">
+                          {res.submitterEmail || '—'}
+                        </div>
+                      </td>
 
-                    <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
-                      {new Date(res.submittedAt).toLocaleDateString()}{' '}
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(res.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-medium text-slate-800">{res.formTitle || 'General Form'}</span>
+                      </td>
 
-                    <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        value={res.status}
-                        onChange={(e) => onUpdateStatus(res.id, e.target.value as ResponseStatus)}
-                        className={`text-xs font-semibold rounded-full px-2.5 py-1 border border-slate-200 cursor-pointer focus:outline-hidden ${
-                          res.status === 'New'
-                            ? 'bg-[#6E1E1E] text-white font-bold'
-                            : res.status === 'Closed/Converted'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 text-slate-800'
-                        }`}
-                      >
-                        {statusOptions.map((st) => (
-                          <option key={st} value={st} className="bg-white text-slate-800">
-                            {st}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
+                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
+                        {dateStr}{' '}
+                        {timeStr && <span className="text-[10px] text-slate-400">{timeStr}</span>}
+                      </td>
 
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectResponseDetail(res);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 group-hover:bg-[#131B2E] group-hover:text-white font-semibold text-xs transition-colors cursor-pointer"
+                      <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={res.status || 'New'}
+                          onChange={(e) => onUpdateStatus(res.id, e.target.value as ResponseStatus)}
+                          className={`text-xs font-semibold rounded-full px-2.5 py-1 border border-slate-200 cursor-pointer focus:outline-hidden ${
+                            res.status === 'New'
+                              ? 'bg-[#6E1E1E] text-white font-bold'
+                              : res.status === 'Closed/Converted'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 text-slate-800'
+                          }`}
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View Details</span>
-                        </button>
-                        {onDeleteResponse && (
+                          {statusOptions.map((st) => (
+                            <option key={st} value={st} className="bg-white text-slate-800">
+                              {st}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Delete submission ${res.id} from ${res.submitterName}?`)) {
-                                onDeleteResponse(res.id);
-                              }
+                              onSelectResponseDetail(res);
                             }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            title="Delete submission"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 group-hover:bg-[#131B2E] group-hover:text-white font-semibold text-xs transition-colors cursor-pointer"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View Details</span>
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {onDeleteResponse && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete submission ${res.id || ''} from ${res.submitterName || 'Lead'}?`)) {
+                                  onDeleteResponse(res.id);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete submission"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -478,13 +497,13 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
             return (
               <div className="fixed inset-0 z-[100] bg-white overflow-auto no-print" id="letterhead-modal">
                 <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-gray-50 no-print">
-                  <h3 className="font-semibold text-sm" style={{ color: '#1B2A5C' }}>Letterhead Preview — {selectedResponseDetail.submitterName}</h3>
+                  <h3 className="font-semibold text-sm" style={{ color: '#1B2A5C' }}>Letterhead Preview — {selectedResponseDetail.submitterName || 'Lead'}</h3>
                   <div className="flex gap-3">
                     <button onClick={() => { setShowLetterheadModal(false); setTimeout(printLetterhead, 100); }}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: '#1B2A5C' }}>
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white cursor-pointer" style={{ background: '#1B2A5C' }}>
                       <Printer className="w-4 h-4" /> Print / Save PDF
                     </button>
-                    <button onClick={() => setShowLetterheadModal(false)} className="px-4 py-2 rounded-lg text-sm border" style={{ color: '#64748b', borderColor: '#e2e8f0' }}>
+                    <button onClick={() => setShowLetterheadModal(false)} className="px-4 py-2 rounded-lg text-sm border cursor-pointer" style={{ color: '#64748b', borderColor: '#e2e8f0' }}>
                       Close
                     </button>
                   </div>
@@ -500,13 +519,13 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
             <div className="p-5 border-b border-gray-100 flex items-start justify-between bg-white">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#8B1A2A' }}>
-                  Ref: {selectedResponseDetail.id}
+                  Ref: {selectedResponseDetail.id || 'N/A'}
                 </span>
                 <h2 className="font-serif text-lg font-bold mt-0.5" style={{ color: '#1B2A5C' }}>
-                  {selectedResponseDetail.submitterName}
+                  {selectedResponseDetail.submitterName || 'Unnamed Lead'}
                 </h2>
                 <p className="text-xs" style={{ color: '#64748b' }}>
-                  {selectedResponseDetail.formTitle}
+                  {selectedResponseDetail.formTitle || 'Inquiry Form'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -523,7 +542,7 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
                 {onDeleteResponse && (
                   <button
                     onClick={() => {
-                      if (window.confirm(`Delete submission ${selectedResponseDetail.id}?`)) {
+                      if (window.confirm(`Delete submission ${selectedResponseDetail.id || ''}?`)) {
                         onDeleteResponse(selectedResponseDetail.id);
                         onSelectResponseDetail(null);
                       }
@@ -550,9 +569,9 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
                     Pipeline Status
                   </label>
                   <div className="flex items-center gap-2">
-                    {getStatusBadge(selectedResponseDetail.status)}
+                    {getStatusBadge(selectedResponseDetail.status || 'New')}
                     <select
-                      value={selectedResponseDetail.status}
+                      value={selectedResponseDetail.status || 'New'}
                       onChange={(e) =>
                         onUpdateStatus(selectedResponseDetail.id, e.target.value as ResponseStatus)
                       }
@@ -567,31 +586,33 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
                   </div>
                 </div>
 
-                <a
-                  href={`https://wa.me/${selectedResponseDetail.submitterPhone.replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition-colors"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>WhatsApp Submitter</span>
-                </a>
+                {selectedResponseDetail.submitterPhone ? (
+                  <a
+                    href={`https://wa.me/${String(selectedResponseDetail.submitterPhone).replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition-colors cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>WhatsApp Submitter</span>
+                  </a>
+                ) : null}
               </div>
 
               {/* Submitter Contact Card */}
               <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 <div>
                   <span className="text-slate-400 font-medium">Telephone / WhatsApp:</span>
-                  <p className="font-bold text-[#131B2E] mt-0.5">{selectedResponseDetail.submitterPhone}</p>
+                  <p className="font-bold text-[#131B2E] mt-0.5">{selectedResponseDetail.submitterPhone || '—'}</p>
                 </div>
                 <div>
                   <span className="text-slate-400 font-medium">Email Address:</span>
-                  <p className="font-bold text-[#131B2E] mt-0.5 truncate">{selectedResponseDetail.submitterEmail}</p>
+                  <p className="font-bold text-[#131B2E] mt-0.5 truncate">{selectedResponseDetail.submitterEmail || '—'}</p>
                 </div>
                 <div>
                   <span className="text-slate-400 font-medium">Submission Date:</span>
                   <p className="font-semibold text-slate-700 mt-0.5">
-                    {new Date(selectedResponseDetail.submittedAt).toLocaleString()}
+                    {selectedResponseDetail.submittedAt ? new Date(selectedResponseDetail.submittedAt).toLocaleString() : '—'}
                   </p>
                 </div>
               </div>
@@ -603,45 +624,56 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
                 </h3>
 
                 <div className="space-y-3 bg-slate-50/60 p-4 rounded-xl border border-slate-200">
-                  {Object.entries(selectedResponseDetail.fieldValues).map(([key, val]) => (
-                    <div key={key} className="py-2 border-b border-slate-200/60 last:border-0">
-                      <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">
-                        {key.replace('field-', '').replace('t-', '').replace(/-/g, ' ')}
-                      </span>
-                      <div className="text-sm font-medium text-slate-800 mt-0.5">
-                        {renderFieldValue(val)}
+                  {selectedResponseDetail.fieldValues && typeof selectedResponseDetail.fieldValues === 'object' && Object.keys(selectedResponseDetail.fieldValues).length > 0 ? (
+                    Object.entries(selectedResponseDetail.fieldValues).map(([key, val]) => (
+                      <div key={key} className="py-2 border-b border-slate-200/60 last:border-0">
+                        <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">
+                          {key.replace('field-', '').replace('t-', '').replace(/-/g, ' ')}
+                        </span>
+                        <div className="text-sm font-medium text-slate-800 mt-0.5">
+                          {renderFieldValue(val)}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No specific form fields provided.</p>
+                  )}
                 </div>
               </div>
 
               {/* Staff Follow-up Notes History */}
               <div className="space-y-3 pt-2">
-                <h3 className="text-xs font-bold text-[#131B2E] uppercase tracking-wider border-b border-slate-100 pb-2">
-                  Staff Follow-up Notes ({selectedResponseDetail.notes.length})
-                </h3>
+                {(() => {
+                  const notesList = Array.isArray(selectedResponseDetail.notes) ? selectedResponseDetail.notes : [];
+                  return (
+                    <>
+                      <h3 className="text-xs font-bold text-[#131B2E] uppercase tracking-wider border-b border-slate-100 pb-2">
+                        Staff Follow-up Notes ({notesList.length})
+                      </h3>
 
-                {selectedResponseDetail.notes.length > 0 ? (
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {selectedResponseDetail.notes.map((note) => (
-                      <div
-                        key={note.id}
-                        className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs space-y-1"
-                      >
-                        <div className="flex items-center justify-between text-amber-900 font-bold">
-                          <span>{note.author}</span>
-                          <span className="text-[10px] text-amber-700 font-normal">
-                            {new Date(note.createdAt).toLocaleString()}
-                          </span>
+                      {notesList.length > 0 ? (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {notesList.map((note) => (
+                            <div
+                              key={note.id || Math.random().toString()}
+                              className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs space-y-1"
+                            >
+                              <div className="flex items-center justify-between text-amber-900 font-bold">
+                                <span>{note.author || 'Staff'}</span>
+                                <span className="text-[10px] text-amber-700 font-normal">
+                                  {note.createdAt ? new Date(note.createdAt).toLocaleString() : '—'}
+                                </span>
+                              </div>
+                              <p className="text-slate-700 font-medium">{note.content}</p>
+                            </div>
+                          ))}
                         </div>
-                        <p className="text-slate-700 font-medium">{note.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400 italic">No notes logged yet.</p>
-                )}
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">No notes logged yet.</p>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Add New Note Input */}
                 <form onSubmit={handleAddNoteSubmit} className="pt-2">

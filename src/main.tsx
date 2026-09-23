@@ -30,9 +30,13 @@ if (typeof window !== 'undefined') {
   });
 }
 
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary fallbackTitle="An application error occurred">
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );
 

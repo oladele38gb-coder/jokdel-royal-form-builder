@@ -34,6 +34,7 @@ import { AdminFormsList } from './components/admin/AdminFormsList';
 import { FormBuilder } from './components/admin/FormBuilder';
 import { AdminResponses } from './components/admin/AdminResponses';
 import { AdminSettings } from './components/admin/AdminSettings';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Firebase Real-Time Firestore Integration
 import {
@@ -538,20 +539,23 @@ function AdminPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
           onPreviewPublicForm={() => { window.location.href = '/'; }}
         />
       ) : adminTab === 'responses' ? (
-        <AdminResponses
-          forms={forms}
-          responses={responses}
-          initialStatusFilter={responsesStatusFilter}
-          onUpdateStatus={handleUpdateResponseStatus}
-          onAddNote={handleAddResponseNote}
-          selectedResponseDetail={selectedResponseDetail}
-          onSelectResponseDetail={setSelectedResponseDetail}
-          onDeleteResponse={handleDeleteResponse}
-          onClearAllResponses={handleClearAllResponses}
-          onRefreshResponses={fetchResponses}
-          isLoading={loadingResponses}
-          isFirebaseLive={firebaseLive}
-        />
+        <ErrorBoundary fallbackTitle="Could not load responses view">
+          <AdminResponses
+            forms={forms}
+            responses={responses}
+            initialStatusFilter={responsesStatusFilter}
+            onUpdateStatus={handleUpdateResponseStatus}
+            onAddNote={handleAddResponseNote}
+            selectedResponseDetail={selectedResponseDetail}
+            onSelectResponseDetail={setSelectedResponseDetail}
+            settings={settings}
+            onDeleteResponse={handleDeleteResponse}
+            onClearAllResponses={handleClearAllResponses}
+            onRefreshResponses={fetchResponses}
+            isLoading={loadingResponses}
+            isFirebaseLive={firebaseLive}
+          />
+        </ErrorBoundary>
       ) : (
         <AdminSettings
           settings={settings}

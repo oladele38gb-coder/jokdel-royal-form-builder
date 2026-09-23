@@ -21,11 +21,11 @@ export const LetterheadPDF: React.FC<LetterheadPDFProps> = ({ response, form, se
 
   // Group fields by section
   const sections: Record<string, { label: string; value: string }[]> = {};
-  form.fields.forEach(field => {
-    if (field.id === '__signature_image__') return;
+  (form?.fields || []).forEach(field => {
+    if (!field || field.id === '__signature_image__') return;
     const section = field.section || 'General';
     if (!sections[section]) sections[section] = [];
-    const rawVal = response.fieldValues?.[field.id];
+    const rawVal = response?.fieldValues?.[field.id];
     if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
       sections[section].push({ label: field.label, value: getStringValue(rawVal) });
     }
@@ -80,7 +80,7 @@ export const LetterheadPDF: React.FC<LetterheadPDFProps> = ({ response, form, se
           </h1>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '6px', fontSize: '9pt', color: '#64748b' }}>
             <span><strong>Reference:</strong> {response.id}</span>
-            <span><strong>Date Submitted:</strong> {new Date(response.submittedAt).toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+            <span><strong>Date Submitted:</strong> {response.submittedAt ? new Date(response.submittedAt).toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}</span>
             <span><strong>Status:</strong> {response.status}</span>
           </div>
           <div style={{ height: '1px', background: '#e2e8f0', marginTop: '12px' }} />

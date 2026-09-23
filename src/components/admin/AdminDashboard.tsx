@@ -32,24 +32,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenNewFormBuilder,
   onSelectResponseDetail,
 }) => {
-  const totalForms = forms.length;
-  const activeForms = forms.filter((f) => f.isActive).length;
-  const totalResponses = responses.length;
+  const totalForms = (forms || []).length;
+  const activeForms = (forms || []).filter((f) => f && f.isActive).length;
+  const safeResponses = (responses || []).filter((r) => r && typeof r === 'object');
+  const totalResponses = safeResponses.length;
 
-  const newResponses = responses.filter((r) => r.status === 'New');
-  const inProgressResponses = responses.filter((r) => r.status === 'In Progress' || r.status === 'Contacted');
-  const convertedResponses = responses.filter((r) => r.status === 'Closed/Converted');
+  const newResponses = safeResponses.filter((r) => r.status === 'New');
+  const inProgressResponses = safeResponses.filter((r) => r.status === 'In Progress' || r.status === 'Contacted');
+  const convertedResponses = safeResponses.filter((r) => r.status === 'Closed/Converted');
 
   // Responses this week (last 7 days)
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const responsesThisWeek = responses.filter(
-    (r) => new Date(r.submittedAt) >= oneWeekAgo
-  ).length;
+  const responsesThisWeek = safeResponses.filter((r) => {
+    if (!r.submittedAt) return false;
+    const d = new Date(r.submittedAt);
+    return !isNaN(d.getTime()) && d >= oneWeekAgo;
+  }).length;
 
   // Recent 8 submissions
-  const recentSubmissions = [...responses]
-    .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
+  const recentSubmissions = [...safeResponses]
+    .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime())
     .slice(0, 8);
 
   const getStatusBadge = (status: string) => {
@@ -301,41 +304,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                {recentSubmissions.map((res) => (
-                  <tr
-                    key={res.id}
-                    className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
-                    onClick={() => onSelectResponseDetail(res)}
-                  >
-                    <td className="py-3.5 px-3">
-                      <div className="font-bold text-[#131B2E] group-hover:text-[#6E1E1E]">
-                        {res.submitterName}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-400">{res.id}</div>
-                    </td>
-                    <td className="py-3.5 px-3 font-medium text-slate-800">
-                      {res.formTitle}
-                    </td>
-                    <td className="py-3.5 px-3 text-slate-500">
-                      {new Date(res.submittedAt).toLocaleDateString()} {new Date(res.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="py-3.5 px-3">
-                      {getStatusBadge(res.status)}
-                    </td>
-                    <td className="py-3.5 px-3 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectResponseDetail(res);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 group-hover:bg-[#131B2E] group-hover:text-white font-semibold text-xs transition-colors"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>View</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {recentSubmissions.map((res) => {
+                  const submitDate = res.submittedAt ? new Date(res.submittedAt) : null;
+                  const isValidDate = submitDate && !isNaN(submitDate.getTime());
+                  const dateStr = isValidDate ? submitDate.toLocaleDateString() : '—';
+                  const timeStr = isValidDate ? submitDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+                  return (
+                    <tr
+                      key={res.id || Math.random().toString()}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                      onClick={() => onSelectResponseDetail(res)}
+                    >
+                      <td className="py-3.5 px-3">
+                        <div className="font-bold text-[#131B2E] group-hover:text-[#6E1E1E]">
+                          {res.submitterName || 'Unnamed Lead'}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400">{res.id || 'N/A'}</div>
+                      </td>
+                      <td className="py-3.5 px-3 font-medium text-slate-800">
+                        {res.formTitle || 'General Form'}
+                      </td>
+                      <td className="py-3.5 px-3 text-slate-500">
+                        {dateStr} {timeStr && <span className="text-slate-400 text-[10px]">{timeStr}</span>}
+                      </td>
+                      <td className="py-3.5 px-3">
+                        {getStatusBadge(res.status || 'New')}
+                      </td>
+                      <td className="py-3.5 px-3 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectResponseDetail(res);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 group-hover:bg-[#131B2E] group-hover:text-white font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
