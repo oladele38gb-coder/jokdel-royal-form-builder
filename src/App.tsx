@@ -44,6 +44,10 @@ import {
   addResponseNoteInFirestore,
   deleteResponseFromFirestore,
   clearAllResponsesFromFirestore,
+  subscribeToForms,
+  saveFormToFirestore,
+  deleteFormFromFirestore,
+  bulkSaveFormsToFirestore,
 } from './lib/firebase';
 
 const STORAGE_KEYS = {
@@ -118,15 +122,27 @@ function useAppState() {
   useEffect(() => { fetchResponses(); }, [fetchResponses]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.FORMS, JSON.stringify(forms)); }, [forms]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
-  useEffect(() => {
-    try {
-      localStorage.setItem('jokdel_responses_v3', JSON.stringify(responses));
-    } catch {}
-  }, [responses]);
+  // NOTE: responses are NOT written to localStorage here as that's handled per-update below
   useEffect(() => {
     if (adminUser) localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(adminUser));
     else localStorage.removeItem(STORAGE_KEYS.AUTH);
   }, [adminUser]);
+
+  // Subscribe to real-time Firestore form updates (cross-device active/inactive sync)
+  useEffect(() => {
+    const unsubscribe = subscribeToForms(
+      (liveForms) => {
+        setForms(liveForms);
+        try {
+          localStorage.setItem(STORAGE_KEYS.FORMS, JSON.stringify(liveForms));
+        } catch {}
+      },
+      () => {
+        // Firestore not available — use localStorage fallback (already loaded at init)
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
 
 
@@ -137,22 +153,25 @@ function useAppState() {
 
   const handleAdminLogout = () => { setAdminUser(null); };
 
-  const handleSaveForm = (formToSave: FormConfig) => {
+  const handleSaveForm = async (formToSave: FormConfig) => {
+    const updatedForm = { ...formToSave, updatedAt: new Date().toISOString() };
     setForms((prev) => {
-      const existsIndex = prev.findIndex((f) => f.id === formToSave.id);
+      const existsIndex = prev.findIndex((f) => f.id === updatedForm.id);
       if (existsIndex > -1) {
         const copy = [...prev];
-        copy[existsIndex] = formToSave;
+        copy[existsIndex] = updatedForm;
         return copy;
       }
-      return [formToSave, ...prev];
+      return [updatedForm, ...prev];
     });
+    // Push to Firestore for cross-device sync
+    try { await saveFormToFirestore(updatedForm); } catch (e) { console.warn('Form save to Firestore failed:', e); }
     setIsBuildingForm(false);
     setEditingFormConfig(null);
     setAdminTab('forms');
   };
 
-  const handleDuplicateForm = (formToDuplicate: FormConfig) => {
+  const handleDuplicateForm = async (formToDuplicate: FormConfig) => {
     const newForm: FormConfig = {
       ...formToDuplicate,
       id: `form-${Date.now()}`,
@@ -161,14 +180,32 @@ function useAppState() {
       updatedAt: new Date().toISOString(),
     };
     setForms((prev) => [newForm, ...prev]);
+    try { await saveFormToFirestore(newForm); } catch (e) { console.warn('Duplicate form Firestore save failed:', e); }
   };
 
-  const handleToggleFormActive = (formId: string) => {
-    setForms((prev) => prev.map((f) => (f.id === formId ? { ...f, isActive: !f.isActive } : f)));
+  const handleToggleFormActive = async (formId: string) => {
+    let updatedForm: FormConfig | undefined;
+    setForms((prev) => {
+      const updated = prev.map((f) => {
+        if (f.id === formId) {
+          updatedForm = { ...f, isActive: !f.isActive, updatedAt: new Date().toISOString() };
+          return updatedForm;
+        }
+        return f;
+      });
+      return updated;
+    });
+    // Push the toggled form to Firestore so all devices update in real-time
+    setTimeout(async () => {
+      if (updatedForm) {
+        try { await saveFormToFirestore(updatedForm); } catch (e) { console.warn('Toggle Firestore sync failed:', e); }
+      }
+    }, 0);
   };
 
-  const handleDeleteForm = (formId: string) => {
+  const handleDeleteForm = async (formId: string) => {
     setForms((prev) => prev.filter((f) => f.id !== formId));
+    try { await deleteFormFromFirestore(formId); } catch (e) { console.warn('Delete form Firestore failed:', e); }
   };
 
   const [firebaseLive, setFirebaseLive] = useState(false);
@@ -334,13 +371,20 @@ function useAppState() {
     handleSaveForm, handleDuplicateForm, handleToggleFormActive, handleDeleteForm,
     handleUpdateResponseStatus, handleAddResponseNote,
     handleDeleteResponse, handleClearAllResponses, handleResetSampleData,
+    bulkSaveFormsToFirestore,
   };
 }
 
 // ─── Public Page (/) ──────────────────────────────────────────────────────────
 function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
   const { forms, settings, setResponses } = appState;
-  const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(() => {
+    // Read ?formId= query param so shared links open the correct form directly
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('formId');
+    } catch { return null; }
+  });
   const [activeSubmittedResponse, setActiveSubmittedResponse] = useState<FormResponse | null>(null);
 
   const selectedFormObj = forms.find((f) => f.id === selectedFormId);
@@ -478,10 +522,12 @@ function AdminPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
     responsesStatusFilter, setResponsesStatusFilter,
     adminUser,
     forms, responses, settings, setSettings,
+    loadingResponses, fetchResponses, firebaseLive,
     handleAdminLogin, handleAdminLogout,
     handleSaveForm, handleDuplicateForm, handleToggleFormActive, handleDeleteForm,
     handleUpdateResponseStatus, handleAddResponseNote,
     handleDeleteResponse, handleClearAllResponses, handleResetSampleData,
+    bulkSaveFormsToFirestore: bulkSaveForms,
   } = appState;
 
   if (!adminUser || !adminUser.isAuthenticated) {
@@ -536,7 +582,8 @@ function AdminPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
           onToggleFormActive={handleToggleFormActive}
           onDeleteForm={handleDeleteForm}
           onOpenNewFormBuilder={() => { setEditingFormConfig(null); setIsBuildingForm(true); }}
-          onPreviewPublicForm={() => { window.location.href = '/'; }}
+          onPreviewPublicForm={(formId) => { window.open(`/?formId=${formId}`, '_blank'); }}
+          onBulkSyncToFirestore={bulkSaveForms}
         />
       ) : adminTab === 'responses' ? (
         <ErrorBoundary fallbackTitle="Could not load responses view">

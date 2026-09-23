@@ -7,12 +7,10 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
-  query,
-  orderBy,
   getDocs,
   writeBatch,
 } from 'firebase/firestore';
-import { FormResponse, ResponseStatus, StaffNote } from '../types';
+import { FormConfig, FormResponse, ResponseStatus, StaffNote } from '../types';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBEt0BZKat2idUIAKVza--cv8NYzvjVZBA",
@@ -29,6 +27,7 @@ export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
 const RESPONSES_COLLECTION = 'responses';
+const FORMS_COLLECTION = 'forms';
 
 /**
  * Subscribe to real-time updates for form responses.
@@ -103,6 +102,62 @@ export async function clearAllResponsesFromFirestore(): Promise<void> {
   const batch = writeBatch(db);
   snapshot.forEach((docSnap) => {
     batch.delete(docSnap.ref);
+  });
+  await batch.commit();
+}
+
+// ─── Forms Firestore Sync ──────────────────────────────────────────────────────
+
+/**
+ * Subscribe to real-time updates for forms (active/inactive status etc).
+ * Triggers on any device when a form is toggled, edited, added or deleted.
+ */
+export function subscribeToForms(
+  onUpdate: (forms: FormConfig[]) => void,
+  onError?: (error: Error) => void
+) {
+  return onSnapshot(
+    collection(db, FORMS_COLLECTION),
+    (snapshot) => {
+      if (snapshot.empty) {
+        // No forms in Firestore yet — don't override local data
+        return;
+      }
+      const list: FormConfig[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as FormConfig);
+      });
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn('Firestore forms subscription error:', err);
+      onError?.(err);
+    }
+  );
+}
+
+/**
+ * Save (create or update) a single form to Firestore
+ */
+export async function saveFormToFirestore(form: FormConfig): Promise<void> {
+  await setDoc(doc(db, FORMS_COLLECTION, form.id), form);
+}
+
+/**
+ * Delete a form from Firestore
+ */
+export async function deleteFormFromFirestore(formId: string): Promise<void> {
+  await deleteDoc(doc(db, FORMS_COLLECTION, formId));
+}
+
+/**
+ * Bulk-save all forms to Firestore (used on first sync)
+ */
+export async function bulkSaveFormsToFirestore(forms: FormConfig[]): Promise<void> {
+  const batch = writeBatch(db);
+  forms.forEach((form) => {
+    batch.set(doc(db, FORMS_COLLECTION, form.id), form);
   });
   await batch.commit();
 }

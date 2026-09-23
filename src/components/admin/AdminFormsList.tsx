@@ -7,12 +7,11 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  CheckCircle2,
-  Power,
   FileSpreadsheet,
-  Calendar,
-  Layers,
-  Search
+  Search,
+  Link2,
+  CloudUpload,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface AdminFormsListProps {
@@ -24,6 +23,7 @@ interface AdminFormsListProps {
   onDeleteForm: (formId: string) => void;
   onOpenNewFormBuilder: () => void;
   onPreviewPublicForm: (formId: string) => void;
+  onBulkSyncToFirestore?: (forms: FormConfig[]) => Promise<void>;
 }
 
 export const AdminFormsList: React.FC<AdminFormsListProps> = ({
@@ -35,9 +35,47 @@ export const AdminFormsList: React.FC<AdminFormsListProps> = ({
   onDeleteForm,
   onOpenNewFormBuilder,
   onPreviewPublicForm,
+  onBulkSyncToFirestore,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncDone, setSyncDone] = useState(false);
+
+  const copyFormLink = (formId: string) => {
+    const url = `${window.location.origin}/?formId=${formId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedFormId(formId);
+      setTimeout(() => setCopiedFormId(null), 2000);
+    }).catch(() => {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopiedFormId(formId);
+      setTimeout(() => setCopiedFormId(null), 2000);
+    });
+  };
+
+  const handleBulkSync = async () => {
+    if (!onBulkSyncToFirestore) return;
+    setIsSyncing(true);
+    try {
+      await onBulkSyncToFirestore(forms);
+      setSyncDone(true);
+      setTimeout(() => setSyncDone(false), 3000);
+    } catch (e) {
+      console.warn('Bulk sync failed:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const filteredForms = forms.filter((form) => {
     const matchesCategory = categoryFilter === 'All' || form.category === categoryFilter;
@@ -61,13 +99,35 @@ export const AdminFormsList: React.FC<AdminFormsListProps> = ({
             Build, edit, duplicate, and control active status for all inquiry forms.
           </p>
         </div>
-        <button
-          onClick={onOpenNewFormBuilder}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#131B2E] hover:bg-slate-800 transition-colors shadow-xs"
-        >
-          <PlusCircle className="w-4 h-4 text-[#C5A059]" />
-          <span>Create New Form</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {onBulkSyncToFirestore && (
+            <button
+              onClick={handleBulkSync}
+              disabled={isSyncing}
+              title="Push all forms to Firebase Firestore so all devices stay in sync"
+              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${
+                syncDone
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              } disabled:opacity-60`}
+            >
+              {syncDone ? (
+                <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /><span>Synced!</span></>
+              ) : isSyncing ? (
+                <><CloudUpload className="w-3.5 h-3.5 animate-pulse" /><span>Syncing...</span></>
+              ) : (
+                <><CloudUpload className="w-3.5 h-3.5" /><span>Sync to Cloud</span></>
+              )}
+            </button>
+          )}
+          <button
+            onClick={onOpenNewFormBuilder}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#131B2E] hover:bg-slate-800 transition-colors shadow-xs"
+          >
+            <PlusCircle className="w-4 h-4 text-[#C5A059]" />
+            <span>Create New Form</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -104,7 +164,7 @@ export const AdminFormsList: React.FC<AdminFormsListProps> = ({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         {/* Quick Tip */}
         <div className="px-5 py-2.5 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-          <span>💡 <strong>Public Visibility:</strong> Click the status pill or the eye icon to instantly hide/show any form on the public website.</span>
+          <span>💡 <strong>Public Visibility:</strong> Click the status pill or the eye icon to instantly hide/show any form. Use <strong>Copy Link</strong> to share a direct form URL with a client.</span>
           <span className="font-semibold text-slate-400">Total Forms: {filteredForms.length}</span>
         </div>
 
@@ -183,6 +243,23 @@ export const AdminFormsList: React.FC<AdminFormsListProps> = ({
 
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Copy Form Link */}
+                          <button
+                            onClick={() => copyFormLink(form.id)}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              copiedFormId === form.id
+                                ? 'text-emerald-700 bg-emerald-50'
+                                : 'text-slate-500 hover:text-[#131B2E] hover:bg-slate-100'
+                            }`}
+                            title="Copy shareable form link to clipboard"
+                          >
+                            {copiedFormId === form.id ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <Link2 className="w-4 h-4" />
+                            )}
+                          </button>
+
                           {/* Toggle Visibility */}
                           <button
                             onClick={() => onToggleFormActive(form.id)}
