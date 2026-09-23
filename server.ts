@@ -71,15 +71,20 @@ app.get('/api/responses', (_req, res) => {
 app.post('/api/responses', (req, res) => {
   const db = readDB();
   const newResponse = {
-    id: generateRefId(),
-    submittedAt: new Date().toISOString(),
-    status: 'New',
-    notes: [],
+    id: req.body.id || generateRefId(),
+    submittedAt: req.body.submittedAt || new Date().toISOString(),
+    status: req.body.status || 'New',
+    notes: req.body.notes || [],
     ...req.body,
   };
-  db.responses.push(newResponse);
+  const existingIdx = db.responses.findIndex((r: any) => r.id === newResponse.id);
+  if (existingIdx > -1) {
+    db.responses[existingIdx] = newResponse;
+  } else {
+    db.responses.unshift(newResponse);
+  }
   writeDB(db);
-  console.log(`✅ New submission: ${newResponse.id} — ${newResponse.submitterName}`);
+  console.log(`✅ New submission saved: ${newResponse.id} — ${newResponse.submitterName}`);
   res.status(201).json(newResponse);
 });
 
@@ -142,16 +147,6 @@ app.put('/api/settings', (req, res) => {
   db.settings = { ...db.settings, ...req.body };
   writeDB(db);
   res.json(db.settings);
-});
-
-// DELETE response
-app.delete('/api/responses/:id', (req, res) => {
-  const db = readDB();
-  const before = db.responses.length;
-  db.responses = db.responses.filter((r: any) => r.id !== req.params.id);
-  if (db.responses.length === before) return res.status(404).json({ error: 'Not found' });
-  writeDB(db);
-  res.json({ success: true });
 });
 
 // ─── Start ─────────────────────────────────────────────────────────────────

@@ -84,27 +84,17 @@ function useAppState() {
   });
   const [loadingResponses, setLoadingResponses] = useState(false);
 
-  // Load responses from Express API and merge with localStorage responses
+  // Load responses from Express API (authoritative source when API is reachable)
   const fetchResponses = useCallback(async () => {
     setLoadingResponses(true);
     try {
       const res = await fetch(`${API_BASE}/responses`);
       if (res.ok) {
         const serverData: FormResponse[] = await res.json();
-        setResponses((prev) => {
-          const map = new Map<string, FormResponse>();
-          // Put existing/local first
-          prev.forEach((r) => map.set(r.id, r));
-          // Overwrite/add server responses
-          serverData.forEach((r) => map.set(r.id, r));
-          const merged = Array.from(map.values()).sort(
-            (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
-          );
-          try {
-            localStorage.setItem('jokdel_responses_v3', JSON.stringify(merged));
-          } catch {}
-          return merged;
-        });
+        setResponses(serverData);
+        try {
+          localStorage.setItem('jokdel_responses_v3', JSON.stringify(serverData));
+        } catch {}
       }
     } catch (e) {
       console.warn('API offline — using localStorage fallback.');
@@ -128,11 +118,9 @@ function useAppState() {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.FORMS, JSON.stringify(forms)); }, [forms]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
   useEffect(() => {
-    if (responses.length > 0) {
-      try {
-        localStorage.setItem('jokdel_responses_v3', JSON.stringify(responses));
-      } catch {}
-    }
+    try {
+      localStorage.setItem('jokdel_responses_v3', JSON.stringify(responses));
+    } catch {}
   }, [responses]);
   useEffect(() => {
     if (adminUser) localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(adminUser));
@@ -228,8 +216,9 @@ function useAppState() {
     // Also sync to local Express server if running
     try {
       await fetch(`${API_BASE}/responses/${responseId}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, notes: updatedNotes }),
       });
     } catch {}
   };
@@ -259,14 +248,21 @@ function useAppState() {
     // Also sync to Express API
     try {
       await fetch(`${API_BASE}/responses/${responseId}/notes`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: noteContent, author: adminUser?.name || 'Staff Admin' }),
       });
     } catch {}
   };
 
   const handleDeleteResponse = async (responseId: string) => {
-    setResponses((prev) => prev.filter((r) => r.id !== responseId));
+    setResponses((prev) => {
+      const remaining = prev.filter((r) => r.id !== responseId);
+      try {
+        localStorage.setItem('jokdel_responses_v3', JSON.stringify(remaining));
+      } catch {}
+      return remaining;
+    });
     if (selectedResponseDetail?.id === responseId) {
       setSelectedResponseDetail(null);
     }
@@ -282,18 +278,15 @@ function useAppState() {
     try {
       await fetch(`${API_BASE}/responses/${responseId}`, { method: 'DELETE' });
     } catch {}
-    try {
-      const saved = localStorage.getItem('jokdel_responses_v3');
-      if (saved) {
-        const parsed = JSON.parse(saved).filter((r: any) => r.id !== responseId);
-        localStorage.setItem('jokdel_responses_v3', JSON.stringify(parsed));
-      }
-    } catch {}
   };
 
   const handleClearAllResponses = async () => {
     setResponses([]);
     setSelectedResponseDetail(null);
+    try {
+      localStorage.setItem('jokdel_responses_v3', JSON.stringify([]));
+      localStorage.removeItem('jokdel_responses_v3');
+    } catch {}
 
     // Clear from Firestore
     try {
@@ -306,18 +299,25 @@ function useAppState() {
     try {
       await fetch(`${API_BASE}/responses`, { method: 'DELETE' });
     } catch {}
-    try {
-      localStorage.removeItem('jokdel_responses_v3');
-    } catch {}
   };
 
-  const handleResetSampleData = () => {
+  const handleResetSampleData = async () => {
     setForms(INITIAL_FORMS);
     setResponses([]);
+    setSelectedResponseDetail(null);
     setSettings(INITIAL_COMPANY_SETTINGS);
     localStorage.removeItem(STORAGE_KEYS.FORMS);
     localStorage.removeItem(STORAGE_KEYS.SETTINGS);
-    localStorage.removeItem('jokdel_responses_v3');
+    try {
+      localStorage.setItem('jokdel_responses_v3', JSON.stringify([]));
+      localStorage.removeItem('jokdel_responses_v3');
+    } catch {}
+    try {
+      await clearAllResponsesFromFirestore();
+    } catch {}
+    try {
+      await fetch(`${API_BASE}/responses`, { method: 'DELETE' });
+    } catch {}
   };
 
   return {

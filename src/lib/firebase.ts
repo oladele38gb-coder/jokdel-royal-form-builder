@@ -38,14 +38,14 @@ export function subscribeToResponses(
   onUpdate: (responses: FormResponse[]) => void,
   onError?: (error: Error) => void
 ) {
-  const q = query(collection(db, RESPONSES_COLLECTION), orderBy('submittedAt', 'desc'));
   return onSnapshot(
-    q,
+    collection(db, RESPONSES_COLLECTION),
     (snapshot) => {
       const list: FormResponse[] = [];
       snapshot.forEach((docSnap) => {
         list.push(docSnap.data() as FormResponse);
       });
+      list.sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
       onUpdate(list);
     },
     (err) => {
