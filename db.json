@@ -1,4 +1,65 @@
 {
-  "responses": [],
+  "responses": [
+    {
+      "id": "JOK-2026-1001",
+      "submittedAt": "2026-09-23T12:12:08.786Z",
+      "status": "New",
+      "notes": [
+        {
+          "id": "note-1",
+          "createdAt": "2026-09-23T12:00:00.000Z",
+          "author": "System",
+          "content": "Inquiry submitted via public web form."
+        }
+      ],
+      "formId": "form-tenancy-data",
+      "formTitle": "Tenancy Data Form",
+      "submitterName": "Oladele Babatunde",
+      "submitterEmail": "oladele.client@gmail.com",
+      "submitterPhone": "+234 816 215 3670",
+      "fieldValues": {
+        "t-surname": "Oladele",
+        "t-othernames": "Babatunde",
+        "t-dob": "1992-05-14",
+        "t-state-origin": "Ogun State",
+        "t-nationality": "Nigerian",
+        "t-religion": "Christianity",
+        "t-mobile-no": "0816 215 3670",
+        "t-email": "oladele.client@gmail.com",
+        "t-gender": "Male",
+        "t-marital-status": "Married",
+        "t-employment": "Chartered Estate Surveyor",
+        "t-office-address": "Victoria Island, Lagos",
+        "t-position-held": "Senior Manager",
+        "t-current-residence": "Ikeja, Lagos State",
+        "t-apartment-type-current": "3 Bed Flat",
+        "t-num-occupants": 4,
+        "t-occupants-relationship": "Family (Wife and 2 Children)",
+        "t-rent-commencement": "2024-01-15",
+        "t-current-annual-rent": "₦3,500,000",
+        "t-living-duration": "2 Years",
+        "t-landlord-name": "Chief Adeleke",
+        "t-landlord-phone": "0803 123 4567",
+        "t-nok-name": "Mrs. Folashade Babatunde",
+        "t-nok-address": "Ikeja, Lagos",
+        "t-nok-phone": "0812 345 6789",
+        "t-nok-relationship": "Wife",
+        "t-g1-name": "Barrister Kayode Alabi",
+        "t-g1-occupation": "Legal Practitioner",
+        "t-g1-address": "GRA Ikeja, Lagos",
+        "t-g1-office": "Alabi & Partners Legal, Marina, Lagos",
+        "t-g1-phone": "0802 222 3344",
+        "t-g2-name": "Engr. Tunde Johnson",
+        "t-g2-occupation": "Civil Engineer",
+        "t-g2-address": "Lekki Phase 1, Lagos",
+        "t-g2-office": "Johnson Infrastructure Ltd, Lekki",
+        "t-g2-phone": "0805 555 6677",
+        "t-declaration-text": [
+          "Accepted"
+        ],
+        "t-signature-fullname": "Oladele Babatunde"
+      }
+    }
+  ],
   "settings": {}
 }

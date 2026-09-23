@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Logo } from './Logo';
 import { FormConfig, FormResponse, CompanySettings } from '../types';
 import { CheckCircle, MessageSquare, Home, Phone, Shield } from 'lucide-react';
@@ -108,13 +109,13 @@ export const FormSuccessScreen: React.FC<FormSuccessScreenProps> = ({
             </button>
 
             {/* View in Admin */}
-            <a
-              href="/admin"
+            <Link
+              to="/admin"
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold border transition-all text-slate-700 bg-slate-50 hover:bg-slate-100 hover:text-[#1B2A5C] border-slate-200"
             >
               <Shield className="w-3.5 h-3.5 text-[#B8962E]" />
               <span>Open Admin Panel to View Submission →</span>
-            </a>
+            </Link>
           </div>
         </div>
 

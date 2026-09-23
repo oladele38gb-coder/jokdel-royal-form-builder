@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Logo } from './Logo';
 import { FormConfig } from '../types';
 import { ChevronDown, Phone, Home, Layers, FileText, Shield } from 'lucide-react';
@@ -95,14 +96,14 @@ export const Header: React.FC<HeaderProps> = ({ forms, selectedFormId, onSelectF
           </a>
 
           {/* Admin Portal */}
-          <a
-            href="/admin"
+          <Link
+            to="/admin"
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:text-[#1B2A5C] hover:border-[#1B2A5C] hover:bg-slate-50 transition-colors"
           >
             <Shield className="w-3.5 h-3.5 text-[#B8962E]" />
             <span className="hidden sm:inline">Admin CRM</span>
             <span className="sm:hidden">Admin</span>
-          </a>
+          </Link>
         </div>
       </div>
     </header>

@@ -66,15 +66,36 @@ function useAppState() {
     } catch { return INITIAL_FORMS; }
   });
 
-  const [responses, setResponses] = useState<FormResponse[]>([]);
+  const [responses, setResponses] = useState<FormResponse[]>(() => {
+    try {
+      const saved = localStorage.getItem('jokdel_responses_v3');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [loadingResponses, setLoadingResponses] = useState(false);
 
-  // Load responses from Express API
+  // Load responses from Express API and merge with localStorage responses
   const fetchResponses = useCallback(async () => {
     setLoadingResponses(true);
     try {
       const res = await fetch(`${API_BASE}/responses`);
-      if (res.ok) setResponses(await res.json());
+      if (res.ok) {
+        const serverData: FormResponse[] = await res.json();
+        setResponses((prev) => {
+          const map = new Map<string, FormResponse>();
+          // Put existing/local first
+          prev.forEach((r) => map.set(r.id, r));
+          // Overwrite/add server responses
+          serverData.forEach((r) => map.set(r.id, r));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+          );
+          try {
+            localStorage.setItem('jokdel_responses_v3', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
     } catch (e) {
       console.warn('API offline — using localStorage fallback.');
       try {
@@ -96,6 +117,13 @@ function useAppState() {
   useEffect(() => { fetchResponses(); }, [fetchResponses]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.FORMS, JSON.stringify(forms)); }, [forms]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
+  useEffect(() => {
+    if (responses.length > 0) {
+      try {
+        localStorage.setItem('jokdel_responses_v3', JSON.stringify(responses));
+      } catch {}
+    }
+  }, [responses]);
   useEffect(() => {
     if (adminUser) localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(adminUser));
     else localStorage.removeItem(STORAGE_KEYS.AUTH);
@@ -269,6 +297,7 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
       fieldValues: formData,
     };
 
+    let savedResponse: FormResponse | null = null;
     try {
       const res = await fetch(`${API_BASE}/responses`, {
         method: 'POST',
@@ -276,22 +305,29 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        const saved = await res.json();
-        setResponses((prev) => [saved, ...prev]);
-        setActiveSubmittedResponse(saved);
-        return;
+        savedResponse = await res.json();
       }
-    } catch { console.warn('API offline — saving locally.'); }
+    } catch {
+      console.warn('API offline — saving locally.');
+    }
 
-    // Fallback: local only
-    const refNumber = Math.floor(1000 + Math.random() * 9000);
-    const localResponse: FormResponse = {
-      id: `JOK-${new Date().getFullYear()}-${refNumber}`,
-      submittedAt: new Date().toISOString(),
-      ...payload,
-    };
-    setResponses((prev) => [localResponse, ...prev]);
-    setActiveSubmittedResponse(localResponse);
+    if (!savedResponse) {
+      const refNumber = Math.floor(1000 + Math.random() * 9000);
+      savedResponse = {
+        id: `JOK-${new Date().getFullYear()}-${refNumber}`,
+        submittedAt: new Date().toISOString(),
+        ...payload,
+      };
+    }
+
+    setResponses((prev) => {
+      const updated = [savedResponse!, ...prev.filter((r) => r.id !== savedResponse!.id)];
+      try {
+        localStorage.setItem('jokdel_responses_v3', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setActiveSubmittedResponse(savedResponse);
   };
 
   return (
@@ -438,6 +474,8 @@ function AdminPage({ appState }: { appState: ReturnType<typeof useAppState> }) {
           onSelectResponseDetail={setSelectedResponseDetail}
           onDeleteResponse={handleDeleteResponse}
           onClearAllResponses={handleClearAllResponses}
+          onRefreshResponses={fetchResponses}
+          isLoading={loadingResponses}
         />
       ) : (
         <AdminSettings

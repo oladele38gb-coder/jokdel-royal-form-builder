@@ -3,7 +3,7 @@ import { FormConfig, FormResponse, ResponseStatus, FileDataValue, CompanySetting
 import { LetterheadPDF, printLetterhead } from './LetterheadPDF';
 import {
   Download, Search, Eye, MessageSquare, FileSpreadsheet, X, FileText,
-  Image as ImageIcon, Printer, Trash2,
+  Image as ImageIcon, Printer, Trash2, RefreshCw,
 } from 'lucide-react';
 
 interface AdminResponsesProps {
@@ -17,6 +17,8 @@ interface AdminResponsesProps {
   settings?: CompanySettings;
   onDeleteResponse?: (responseId: string) => void;
   onClearAllResponses?: () => void;
+  onRefreshResponses?: () => void;
+  isLoading?: boolean;
 }
 
 export const AdminResponses: React.FC<AdminResponsesProps> = ({
@@ -30,6 +32,8 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
   settings,
   onDeleteResponse,
   onClearAllResponses,
+  onRefreshResponses,
+  isLoading,
 }) => {
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -250,6 +254,18 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {onRefreshResponses && (
+            <button
+              onClick={onRefreshResponses}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-60"
+              title="Refresh and sync submissions"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>{isLoading ? 'Syncing...' : 'Sync / Refresh'}</span>
+            </button>
+          )}
+
           {responses.length > 0 && onClearAllResponses && (
             <button
               onClick={() => {

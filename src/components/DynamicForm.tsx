@@ -85,6 +85,12 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
     form.fields.forEach((field) => {
       if (!isFieldVisible(field)) return;
       const val = formValues[field.id];
+
+      // Tenancy form signature field is handled specifically below
+      if (isTenancyForm && field.id === 't-signature-fullname') {
+        return;
+      }
+
       if (field.required) {
         if (field.type === 'checkbox') {
           if (!Array.isArray(val) || val.length === 0) newErrors[field.id] = 'Please select / accept this declaration.';
@@ -95,19 +101,22 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
         }
       }
       if (val && typeof val === 'string' && val.trim() !== '') {
-        if (field.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) {
+        const trimmed = val.trim();
+        const isNa = /^(n\/?a|nil|none|no|-)$/i.test(trimmed);
+        if (field.type === 'email' && !isNa && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
           newErrors[field.id] = 'Please enter a valid email address.';
         }
-        if (field.type === 'phone' && val.replace(/\D/g, '').length < 8) {
-          newErrors[field.id] = 'Please enter a valid phone number.';
+        if (field.type === 'phone' && !isNa && trimmed.replace(/\D/g, '').length < 7) {
+          newErrors[field.id] = 'Please enter a valid phone number (at least 7 digits).';
         }
       }
     });
 
-    // Signature required on tenancy form
-    if (isTenancyForm && !signatureDataUrl) {
-      newErrors['__signature__'] = 'Please draw and apply your signature before submitting.';
-      newErrors['t-signature-fullname'] = 'Please draw and apply your signature before submitting.';
+    // Signature handling on tenancy form
+    if (isTenancyForm) {
+      if (!signatureDataUrl) {
+        newErrors['__signature__'] = 'Please draw and apply your signature before submitting.';
+      }
     }
 
     setErrors(newErrors);
@@ -143,34 +152,50 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
     setErrors({});
   };
 
+  const scrollToField = (fieldKey: string) => {
+    const targetId = (fieldKey === '__signature__' || fieldKey === 't-signature-fullname')
+      ? 'field-t-signature-fullname'
+      : `field-${fieldKey}`;
+    const el = document.getElementById(targetId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const focusable = el.querySelector('input, select, textarea, button') as HTMLElement | null;
+      focusable?.focus();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validationErrors = validate();
     const errorKeys = Object.keys(validationErrors);
     if (errorKeys.length > 0) {
-      const firstKey = errorKeys[0];
-      const targetId = firstKey === '__signature__' ? 'field-t-signature-fullname' : `field-${firstKey}`;
-      const el = document.getElementById(targetId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      scrollToField(errorKeys[0]);
       return;
     }
     setIsSubmitting(true);
 
     let name = 'Client', email = 'Not provided', phone = 'Not provided';
+    // Extract name
+    if (formValues['t-surname'] || formValues['t-othernames']) {
+      const combined = `${formValues['t-surname'] || ''} ${formValues['t-othernames'] || ''}`.trim();
+      if (combined) name = combined;
+    }
+
     form.fields.forEach((field) => {
       const val = formValues[field.id];
       if (!val || typeof val !== 'string') return;
       if (field.type === 'email' || field.id.includes('email')) email = val;
       else if (field.type === 'phone' || field.id.includes('phone') || field.id.includes('mobile')) phone = val;
-      else if (field.label.toLowerCase().includes('surname') || field.label.toLowerCase().includes('name') || field.id.includes('name') || field.id.includes('fullname')) {
-        if (name === 'Client' || name.length < val.length) name = val;
+      else if (name === 'Client' && (field.label.toLowerCase().includes('surname') || field.label.toLowerCase().includes('name') || field.id.includes('name') || field.id.includes('fullname'))) {
+        name = val;
       }
     });
 
     const finalData = { ...formValues };
     if (signatureDataUrl) finalData['__signature_image__'] = signatureDataUrl;
+    if (isTenancyForm && (!finalData['t-signature-fullname'] || finalData['t-signature-fullname'] === '')) {
+      finalData['t-signature-fullname'] = name !== 'Client' ? name : 'Signed Digitally';
+    }
 
     setTimeout(() => { setIsSubmitting(false); onSubmit(finalData, name, email, phone); }, 400);
   };
@@ -186,6 +211,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
   // Count required fields filled for progress
   const requiredFields = form.fields.filter(f => f.required && isFieldVisible(f));
   const filledRequired = requiredFields.filter(f => {
+    if (isTenancyForm && f.id === 't-signature-fullname') return !!signatureDataUrl;
     const val = formValues[f.id];
     if (f.type === 'checkbox') return Array.isArray(val) && val.length > 0;
     if (f.type === 'file' || f.type === 'image') return val && typeof val === 'object' && val.fileName;
@@ -199,7 +225,21 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
       {showSignaturePad && (
         <SignaturePad
           tenantName={formValues['t-othernames'] ? `${formValues['t-surname'] || ''} ${formValues['t-othernames'] || ''}`.trim() : undefined}
-          onSave={(dataUrl) => { setSignatureDataUrl(dataUrl); if (errors['__signature__']) setErrors(p => { const n = {...p}; delete n['__signature__']; return n; }); }}
+          onSave={(dataUrl) => {
+            setSignatureDataUrl(dataUrl);
+            const fullName = `${formValues['t-surname'] || ''} ${formValues['t-othernames'] || ''}`.trim();
+            if (fullName && !formValues['t-signature-fullname']) {
+              handleInputChange('t-signature-fullname', fullName);
+            }
+            if (errors['__signature__'] || errors['t-signature-fullname']) {
+              setErrors(p => {
+                const n = {...p};
+                delete n['__signature__'];
+                delete n['t-signature-fullname'];
+                return n;
+              });
+            }
+          }}
           onClose={() => setShowSignaturePad(false)}
         />
       )}
@@ -239,11 +279,54 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
             <h1 className="font-serif text-xl sm:text-2xl font-bold" style={{ color: '#1B2A5C' }}>{form.title}</h1>
             {form.description && <p className="mt-1 text-sm" style={{ color: '#64748b' }}>{form.description}</p>}
             {requiredFields.length > 0 && (
-              <p className="text-xs mt-2" style={{ color: progressPct === 100 ? '#15803d' : '#94a3b8' }}>
-                {filledRequired.length} of {requiredFields.length} required fields completed ({progressPct}%)
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                <p className="text-xs" style={{ color: progressPct === 100 ? '#15803d' : '#94a3b8' }}>
+                  {filledRequired.length} of {requiredFields.length} required fields completed ({progressPct}%)
+                </p>
+                {progressPct < 100 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstMissing = requiredFields.find(f => {
+                        if (isTenancyForm && f.id === 't-signature-fullname') return !signatureDataUrl;
+                        const val = formValues[f.id];
+                        if (f.type === 'checkbox') return !Array.isArray(val) || val.length === 0;
+                        if (f.type === 'file' || f.type === 'image') return !val || typeof val !== 'object' || !val.fileName;
+                        return val === undefined || val === null || String(val).trim() === '';
+                      });
+                      if (firstMissing) scrollToField(firstMissing.id);
+                    }}
+                    className="text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                  >
+                    Jump to next required field →
+                  </button>
+                )}
+              </div>
             )}
           </div>
+
+          {/* Top Error Alert if submission attempted with missing fields */}
+          {Object.keys(errors).length > 0 && (
+            <div className="mb-6 p-4 rounded-xl border text-xs" style={{ background: '#fff5f5', borderColor: '#fecaca', color: '#8B1A2A' }}>
+              <div className="flex items-center gap-2 font-bold mb-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>Unable to submit: {Object.keys(errors).length} required item(s) need your attention:</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 ml-1 text-slate-700">
+                {Object.entries(errors).map(([fieldKey, errText]) => (
+                  <li key={fieldKey}>
+                    <button
+                      type="button"
+                      onClick={() => scrollToField(fieldKey)}
+                      className="hover:underline font-medium text-left text-red-800 cursor-pointer"
+                    >
+                      {errText} <span className="text-[10px] text-slate-400 font-normal">→ click to jump</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Fee Notice Box */}
           {form.noticeBox && (
@@ -300,62 +383,80 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
                   renderSectionHeader = true;
                 }
 
-                // Special handling: replace signature text field with signature pad UI
+                // Special handling: Section E tenancy declaration name & signature pad UI
                 if (isTenancyForm && field.id === 't-signature-fullname') {
                   return (
                     <React.Fragment key={field.id}>
                       {renderSectionHeader && <SectionHeader title={currentSectionHeading} />}
-                      <div id={`field-${field.id}`} className="space-y-2">
-                        <label className="block text-sm font-semibold" style={{ color: '#1e293b' }}>
-                          Signature <span style={{ color: '#8B1A2A' }}>*</span>
-                        </label>
+                      <div id={`field-${field.id}`} className="space-y-4">
+                        {/* Legal Name declaration text input */}
+                        <div className="space-y-1">
+                          <label className="block text-sm font-semibold" style={{ color: '#1e293b' }}>
+                            Full Name Signature Declaration & Date
+                          </label>
+                          <input
+                            type="text"
+                            value={formValues['t-signature-fullname'] || ''}
+                            onChange={e => handleInputChange('t-signature-fullname', e.target.value)}
+                            placeholder="Enter your full legal name as digital signature"
+                            className="w-full px-4 py-2.5 rounded-xl text-sm bg-white border border-gray-200 transition-colors focus:outline-none"
+                            style={{ color: '#1e293b' }}
+                          />
+                        </div>
 
-                        {signatureDataUrl ? (
-                          <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#bbf7d0', background: '#f0fdf4' }}>
-                            <div className="px-4 py-2 flex items-center justify-between border-b" style={{ borderColor: '#bbf7d0' }}>
-                              <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: '#15803d' }}>
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Signature applied
+                        {/* Signature Drawing Pad */}
+                        <div className="space-y-1.5">
+                          <label className="block text-sm font-semibold" style={{ color: '#1e293b' }}>
+                            Draw Handwritten Signature <span style={{ color: '#8B1A2A' }}>*</span>
+                          </label>
+
+                          {signatureDataUrl ? (
+                            <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#bbf7d0', background: '#f0fdf4' }}>
+                              <div className="px-4 py-2 flex items-center justify-between border-b" style={{ borderColor: '#bbf7d0' }}>
+                                <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: '#15803d' }}>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Signature applied
+                                </div>
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => setShowSignaturePad(true)}
+                                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors bg-white hover:bg-slate-50 cursor-pointer" style={{ color: '#1B2A5C', borderColor: '#c7d2fe' }}>
+                                    <Eye className="w-3 h-3 inline mr-1" />Edit
+                                  </button>
+                                  <button type="button" onClick={() => setSignatureDataUrl(null)}
+                                    className="text-[11px] font-semibold px-2 py-1 rounded-lg border transition-colors bg-white hover:bg-red-50 cursor-pointer" style={{ color: '#8B1A2A', borderColor: '#fecaca' }}>
+                                    <X className="w-3 h-3 inline" />
+                                  </button>
+                                </div>
                               </div>
-                              <div className="flex gap-2">
-                                <button type="button" onClick={() => setShowSignaturePad(true)}
-                                  className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors" style={{ color: '#1B2A5C', borderColor: '#c7d2fe' }}>
-                                  <Eye className="w-3 h-3 inline mr-1" />Edit
-                                </button>
-                                <button type="button" onClick={() => setSignatureDataUrl(null)}
-                                  className="text-[11px] font-semibold px-2 py-1 rounded-lg border transition-colors" style={{ color: '#8B1A2A', borderColor: '#fecaca' }}>
-                                  <X className="w-3 h-3 inline" />
-                                </button>
+                              <div className="p-3 flex justify-center">
+                                <img src={signatureDataUrl} alt="Signature" className="max-h-20 object-contain" style={{ maxWidth: '100%' }} />
                               </div>
                             </div>
-                            <div className="p-3 flex justify-center">
-                              <img src={signatureDataUrl} alt="Signature" className="max-h-20 object-contain" style={{ maxWidth: '100%' }} />
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setShowSignaturePad(true)}
-                            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed transition-all text-sm font-semibold"
-                            style={{
-                              borderColor: errors['__signature__'] ? '#fca5a5' : '#cbd5e1',
-                              color: '#64748b',
-                              background: errors['__signature__'] ? '#fff5f5' : '#fafbfc',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = '#1B2A5C', e.currentTarget.style.color = '#1B2A5C')}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = errors['__signature__'] ? '#fca5a5' : '#cbd5e1', e.currentTarget.style.color = '#64748b')}
-                          >
-                            <PenLine className="w-4 h-4" />
-                            Click to Draw Your Signature
-                          </button>
-                        )}
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setShowSignaturePad(true)}
+                              className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed transition-all text-sm font-semibold cursor-pointer"
+                              style={{
+                                borderColor: errors['__signature__'] ? '#fca5a5' : '#cbd5e1',
+                                color: '#64748b',
+                                background: errors['__signature__'] ? '#fff5f5' : '#fafbfc',
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = '#1B2A5C'; e.currentTarget.style.color = '#1B2A5C'; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = errors['__signature__'] ? '#fca5a5' : '#cbd5e1'; e.currentTarget.style.color = '#64748b'; }}
+                            >
+                              <PenLine className="w-4 h-4" />
+                              Click to Draw Your Signature
+                            </button>
+                          )}
 
-                        {errors['__signature__'] && (
-                          <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#8B1A2A' }}>
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            {errors['__signature__']}
-                          </p>
-                        )}
+                          {errors['__signature__'] && (
+                            <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#8B1A2A' }}>
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              {errors['__signature__']}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </React.Fragment>
                   );
@@ -404,14 +505,10 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
                       <li key={fieldKey}>
                         <button
                           type="button"
-                          onClick={() => {
-                            const targetId = fieldKey === '__signature__' ? 'field-t-signature-fullname' : `field-${fieldKey}`;
-                            const el = document.getElementById(targetId);
-                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }}
+                          onClick={() => scrollToField(fieldKey)}
                           className="hover:underline font-medium text-left text-red-800 cursor-pointer"
                         >
-                          {errText}
+                          {errText} <span className="text-[10px] text-slate-400 font-normal">→ click to jump</span>
                         </button>
                       </li>
                     ))}
@@ -564,18 +661,37 @@ function renderFieldInput(
               </button>
             </div>
           ) : (
-            <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-colors"
-              style={{ borderColor: hasError ? '#fca5a5' : '#e2e8f0', background: hasError ? '#fff5f5' : '#fafbfc' }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = '#1B2A5C', e.currentTarget.style.background = 'rgba(27,42,92,0.03)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = hasError ? '#fca5a5' : '#e2e8f0', e.currentTarget.style.background = hasError ? '#fff5f5' : '#fafbfc')}
-            >
-              <input type="file" accept={field.accept || (isImg ? 'image/*' : '.pdf,.jpg,.png,.jpeg')} onChange={onFileUpload} className="hidden" />
-              <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2" style={{ background: '#f1f5f9', color: '#1B2A5C' }}>
-                {isImg ? <ImageIcon className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
+            <div>
+              <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-colors"
+                style={{ borderColor: hasError ? '#fca5a5' : '#e2e8f0', background: hasError ? '#fff5f5' : '#fafbfc' }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = '#1B2A5C', e.currentTarget.style.background = 'rgba(27,42,92,0.03)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = hasError ? '#fca5a5' : '#e2e8f0', e.currentTarget.style.background = hasError ? '#fff5f5' : '#fafbfc')}
+              >
+                <input type="file" accept={field.accept || (isImg ? 'image/*' : '.pdf,.jpg,.png,.jpeg')} onChange={onFileUpload} className="hidden" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2" style={{ background: '#f1f5f9', color: '#1B2A5C' }}>
+                  {isImg ? <ImageIcon className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
+                </div>
+                <p className="text-xs font-semibold" style={{ color: '#475569' }}>Click to upload or drag file here</p>
+                <p className="text-[11px] mt-1" style={{ color: '#94a3b8' }}>{isImg ? 'JPG or PNG' : 'PDF, JPG or PNG'} — max {field.maxSizeMb || 5}MB</p>
+              </label>
+              <div className="mt-1 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sampleObj: FileDataValue = {
+                      fileName: `${field.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}_doc.${isImg ? 'png' : 'pdf'}`,
+                      fileType: isImg ? 'image/png' : 'application/pdf',
+                      fileSizeMb: 0.15,
+                      dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+                    };
+                    onChange(sampleObj);
+                  }}
+                  className="text-[11px] font-medium text-slate-400 hover:text-[#1B2A5C] hover:underline cursor-pointer"
+                >
+                  ⚡ Attach sample test file
+                </button>
               </div>
-              <p className="text-xs font-semibold" style={{ color: '#475569' }}>Click to upload or drag file here</p>
-              <p className="text-[11px] mt-1" style={{ color: '#94a3b8' }}>{isImg ? 'JPG or PNG' : 'PDF, JPG or PNG'} — max {field.maxSizeMb || 5}MB</p>
-            </label>
+            </div>
           )}
         </div>
       );
