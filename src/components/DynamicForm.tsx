@@ -1,20 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { FormConfig, FormField, FileDataValue } from '../types';
+import { SignaturePad } from './SignaturePad';
 import {
-  ArrowLeft,
-  Send,
-  AlertCircle,
-  Info,
-  Upload,
-  FileText,
-  Image as ImageIcon,
-  CheckCircle2,
-  X,
-  CreditCard,
-  Building,
-  ShieldCheck,
-  Copy,
-  Check,
+  ArrowLeft, Send, AlertCircle, Info, Upload, FileText,
+  Image as ImageIcon, CheckCircle2, X, CreditCard, Building,
+  ShieldCheck, Copy, Check, PenLine, Eye,
 } from 'lucide-react';
 
 interface DynamicFormProps {
@@ -33,26 +23,24 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
   const [formValues, setFormValues] = useState<Record<string, any>>(() => {
     const initial: Record<string, any> = {};
     form.fields.forEach((field) => {
-      if (field.type === 'checkbox') {
-        initial[field.id] = [];
-      } else {
-        initial[field.id] = field.defaultValue || '';
-      }
+      if (field.type === 'checkbox') initial[field.id] = [];
+      else initial[field.id] = field.defaultValue || '';
     });
     return initial;
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  const isTenancyForm = form.id === 'form-tenancy-data';
 
   const handleInputChange = (fieldId: string, value: any) => {
     setFormValues((prev) => ({ ...prev, [fieldId]: value }));
     if (errors[fieldId]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[fieldId];
-        return next;
-      });
+      setErrors((prev) => { const next = { ...prev }; delete next[fieldId]; return next; });
     }
   };
 
@@ -60,45 +48,25 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
     setFormValues((prev) => {
       const current = Array.isArray(prev[fieldId]) ? [...prev[fieldId]] : [];
       const index = current.indexOf(optionValue);
-      if (index > -1) {
-        current.splice(index, 1);
-      } else {
-        current.push(optionValue);
-      }
+      if (index > -1) current.splice(index, 1);
+      else current.push(optionValue);
       return { ...prev, [fieldId]: current };
     });
-    if (errors[fieldId]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[fieldId];
-        return next;
-      });
-    }
+    if (errors[fieldId]) setErrors((prev) => { const next = { ...prev }; delete next[fieldId]; return next; });
   };
 
   const handleFileUpload = (field: FormField, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const maxMb = field.maxSizeMb || 5;
     const fileSizeMb = Number((file.size / (1024 * 1024)).toFixed(2));
-
     if (fileSizeMb > maxMb) {
-      setErrors((prev) => ({
-        ...prev,
-        [field.id]: `File size (${fileSizeMb}MB) exceeds maximum limit of ${maxMb}MB.`,
-      }));
+      setErrors((prev) => ({ ...prev, [field.id]: `File size (${fileSizeMb}MB) exceeds the ${maxMb}MB limit.` }));
       return;
     }
-
     const reader = new FileReader();
     reader.onload = () => {
-      const fileObj: FileDataValue = {
-        fileName: file.name,
-        fileType: file.type,
-        fileSizeMb,
-        dataUrl: reader.result as string,
-      };
+      const fileObj: FileDataValue = { fileName: file.name, fileType: file.type, fileSizeMb, dataUrl: reader.result as string };
       handleInputChange(field.id, fileObj);
     };
     reader.readAsDataURL(file);
@@ -108,101 +76,103 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
     if (!field.conditionalOn) return true;
     const parentVal = formValues[field.conditionalOn.fieldId];
     if (!parentVal) return false;
-
-    if (Array.isArray(field.conditionalOn.value)) {
-      return field.conditionalOn.value.includes(String(parentVal));
-    }
+    if (Array.isArray(field.conditionalOn.value)) return field.conditionalOn.value.includes(String(parentVal));
     return String(parentVal) === field.conditionalOn.value;
   };
 
-  const validate = () => {
+  const validate = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
-
     form.fields.forEach((field) => {
       if (!isFieldVisible(field)) return;
-
       const val = formValues[field.id];
-
-      // Required check
       if (field.required) {
         if (field.type === 'checkbox') {
-          if (!Array.isArray(val) || val.length === 0) {
-            newErrors[field.id] = 'Please select at least one option';
-          }
+          if (!Array.isArray(val) || val.length === 0) newErrors[field.id] = 'Please select / accept this declaration.';
         } else if (field.type === 'file' || field.type === 'image') {
-          if (!val || typeof val !== 'object' || !val.fileName) {
-            newErrors[field.id] = `${field.label} upload is required`;
-          }
+          if (!val || typeof val !== 'object' || !val.fileName) newErrors[field.id] = `Please upload ${field.label}.`;
         } else if (val === undefined || val === null || String(val).trim() === '') {
-          newErrors[field.id] = `${field.label} is required`;
+          newErrors[field.id] = `${field.label} is required.`;
         }
       }
-
-      // Format validations
       if (val && typeof val === 'string' && val.trim() !== '') {
-        if (field.type === 'email') {
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(val.trim())) {
-            newErrors[field.id] = 'Please enter a valid email address';
-          }
+        if (field.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) {
+          newErrors[field.id] = 'Please enter a valid email address.';
         }
-
-        if (field.type === 'phone') {
-          const digitsOnly = val.replace(/\D/g, '');
-          if (digitsOnly.length < 8) {
-            newErrors[field.id] = 'Please enter a valid phone number';
-          }
+        if (field.type === 'phone' && val.replace(/\D/g, '').length < 8) {
+          newErrors[field.id] = 'Please enter a valid phone number.';
         }
       }
     });
 
+    // Signature required on tenancy form
+    if (isTenancyForm && !signatureDataUrl) {
+      newErrors['__signature__'] = 'Please draw and apply your signature before submitting.';
+      newErrors['t-signature-fullname'] = 'Please draw and apply your signature before submitting.';
+    }
+
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
+  };
+
+  const handleAutoFillDemo = () => {
+    const demoValues: Record<string, any> = {};
+    form.fields.forEach((field) => {
+      if (field.type === 'email') demoValues[field.id] = 'oladele.client@gmail.com';
+      else if (field.type === 'phone') demoValues[field.id] = '0816 215 3670';
+      else if (field.type === 'number') demoValues[field.id] = 3;
+      else if (field.type === 'date') demoValues[field.id] = '2026-09-23';
+      else if (field.type === 'select') demoValues[field.id] = field.options?.[0]?.value || '';
+      else if (field.type === 'radio') demoValues[field.id] = field.options?.[0]?.value || '';
+      else if (field.type === 'checkbox') demoValues[field.id] = field.options?.map(o => o.value) || ['Accepted'];
+      else if (field.type === 'file' || field.type === 'image') {
+        demoValues[field.id] = {
+          fileName: `${field.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}_sample.png`,
+          fileType: 'image/png',
+          fileSizeMb: 0.15,
+          dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        };
+      } else {
+        demoValues[field.id] = field.id.includes('name') ? 'Oladele Babatunde' : `Sample ${field.label}`;
+      }
+    });
+    setFormValues(demoValues);
+    if (isTenancyForm) {
+      // Sample 1-pixel transparent PNG dataUrl for demo signature
+      setSignatureDataUrl('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    }
+    setErrors({});
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) {
-      const firstErrorKey = Object.keys(errors)[0];
-      if (firstErrorKey) {
-        const el = document.getElementById(`field-${firstErrorKey}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const validationErrors = validate();
+    const errorKeys = Object.keys(validationErrors);
+    if (errorKeys.length > 0) {
+      const firstKey = errorKeys[0];
+      const targetId = firstKey === '__signature__' ? 'field-t-signature-fullname' : `field-${firstKey}`;
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       return;
     }
-
     setIsSubmitting(true);
 
-    let name = 'Client';
-    let email = 'Not provided';
-    let phone = 'Not provided';
-
-    // Extract name, email, phone from values
+    let name = 'Client', email = 'Not provided', phone = 'Not provided';
     form.fields.forEach((field) => {
       const val = formValues[field.id];
-      if (!val) return;
-      if (typeof val === 'string') {
-        if (field.type === 'email' || field.id.includes('email')) {
-          email = val;
-        } else if (field.type === 'phone' || field.id.includes('phone') || field.id.includes('mobile')) {
-          phone = val;
-        } else if (
-          field.label.toLowerCase().includes('surname') ||
-          field.label.toLowerCase().includes('name') ||
-          field.id.includes('name') ||
-          field.id.includes('fullname')
-        ) {
-          if (name === 'Client' || name.length < val.length) {
-            name = val;
-          }
-        }
+      if (!val || typeof val !== 'string') return;
+      if (field.type === 'email' || field.id.includes('email')) email = val;
+      else if (field.type === 'phone' || field.id.includes('phone') || field.id.includes('mobile')) phone = val;
+      else if (field.label.toLowerCase().includes('surname') || field.label.toLowerCase().includes('name') || field.id.includes('name') || field.id.includes('fullname')) {
+        if (name === 'Client' || name.length < val.length) name = val;
       }
     });
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      onSubmit(formValues, name, email, phone);
-    }, 400);
+    const finalData = { ...formValues };
+    if (signatureDataUrl) finalData['__signature_image__'] = signatureDataUrl;
+
+    setTimeout(() => { setIsSubmitting(false); onSubmit(finalData, name, email, phone); }, 400);
   };
 
   const handleCopyAccount = (accNum: string) => {
@@ -211,123 +181,103 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
     setTimeout(() => setCopiedAccount(false), 2000);
   };
 
-  // Group fields by sections if present
   let currentSectionHeading = '';
+
+  // Count required fields filled for progress
+  const requiredFields = form.fields.filter(f => f.required && isFieldVisible(f));
+  const filledRequired = requiredFields.filter(f => {
+    const val = formValues[f.id];
+    if (f.type === 'checkbox') return Array.isArray(val) && val.length > 0;
+    if (f.type === 'file' || f.type === 'image') return val && typeof val === 'object' && val.fileName;
+    return val !== undefined && val !== null && String(val).trim() !== '';
+  });
+  const progressPct = requiredFields.length > 0 ? Math.round((filledRequired.length / requiredFields.length) * 100) : 0;
+  const allFilled = progressPct === 100 && (!isTenancyForm || !!signatureDataUrl);
 
   return (
     <div className="py-4 sm:py-8 px-3 sm:px-6 lg:px-8 max-w-3xl mx-auto">
-      {/* Back Button */}
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-600 hover:text-[#131B2E] transition-colors mb-4 group"
-      >
-        <ArrowLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#131B2E] transition-colors" />
-        <span>Back to All Inquiry Forms</span>
+      {showSignaturePad && (
+        <SignaturePad
+          tenantName={formValues['t-othernames'] ? `${formValues['t-surname'] || ''} ${formValues['t-othernames'] || ''}`.trim() : undefined}
+          onSave={(dataUrl) => { setSignatureDataUrl(dataUrl); if (errors['__signature__']) setErrors(p => { const n = {...p}; delete n['__signature__']; return n; }); }}
+          onClose={() => setShowSignaturePad(false)}
+        />
+      )}
+
+      {/* Back */}
+      <button onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium mb-5 transition-colors group" style={{ color: '#64748b' }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#1B2A5C')} onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
+        <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+        Back to All Forms
       </button>
 
-      {/* Form Card */}
-      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Document Banner / Header Notice if present */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" ref={formRef}>
+        {/* Form header notice (tenancy letterhead strip) */}
         {form.headerNotice && (
-          <div className="bg-[#131B2E] text-white p-3 px-4 sm:px-6 text-center text-xs font-semibold tracking-wide flex flex-col sm:flex-row items-center justify-between gap-1 border-b border-slate-800">
-            <span className="font-serif text-xs sm:text-sm italic font-bold tracking-wider">JOKDEL ROYAL NIG. LTD</span>
-            <span className="text-slate-300 text-[10px] sm:text-[11px]">{form.headerNotice}</span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-1 px-5 py-3 text-xs" style={{ background: '#1B2A5C' }}>
+            <span className="font-serif font-bold text-white tracking-wider text-sm">JOKDEL ROYAL NIG. LTD</span>
+            <span style={{ color: 'rgba(255,255,255,0.65)' }}>{form.headerNotice}</span>
           </div>
         )}
 
-        <div className="p-4 sm:p-8">
-          {/* Form Title Header */}
-          <div className="border-b border-slate-100 pb-4 mb-6">
-            <div className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 text-[#6E1E1E] text-[10px] sm:text-xs font-semibold tracking-wider uppercase mb-1.5">
-              {form.category || 'Jokdel Royal Form'}
-            </div>
-            <h1 className="font-serif text-lg sm:text-2xl font-bold text-[#131B2E] tracking-tight">
-              {form.title}
-            </h1>
-            {form.description && (
-              <p className="mt-1.5 text-xs sm:text-sm text-slate-600 leading-relaxed">
-                {form.description}
+        {/* Progress bar */}
+        {requiredFields.length > 0 && (
+          <div className="h-1 w-full" style={{ background: '#f1f5f9' }}>
+            <div
+              className="h-full transition-all duration-500"
+              style={{ width: `${progressPct}%`, background: progressPct === 100 ? '#15803d' : '#1B2A5C' }}
+            />
+          </div>
+        )}
+
+        <div className="p-5 sm:p-8">
+          {/* Title */}
+          <div className="border-b border-gray-100 pb-4 mb-6">
+            <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase mb-1.5" style={{ background: 'rgba(27,42,92,0.07)', color: '#1B2A5C' }}>
+              {form.category || 'Jokdel Royal'}
+            </span>
+            <h1 className="font-serif text-xl sm:text-2xl font-bold" style={{ color: '#1B2A5C' }}>{form.title}</h1>
+            {form.description && <p className="mt-1 text-sm" style={{ color: '#64748b' }}>{form.description}</p>}
+            {requiredFields.length > 0 && (
+              <p className="text-xs mt-2" style={{ color: progressPct === 100 ? '#15803d' : '#94a3b8' }}>
+                {filledRequired.length} of {requiredFields.length} required fields completed ({progressPct}%)
               </p>
             )}
           </div>
 
-          {/* Consultation Fee / Commitment Notice Box (Light Blue / Emerald Modern Redesign) */}
+          {/* Fee Notice Box */}
           {form.noticeBox && (
-            <div className="mb-6 p-4 sm:p-5 bg-gradient-to-br from-emerald-50/90 via-green-50/80 to-teal-50/90 border border-emerald-200/90 rounded-xl sm:rounded-2xl shadow-2xs space-y-3">
-              <div className="flex items-center gap-2 border-b border-emerald-200/60 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-emerald-600 text-white rounded-lg shadow-2xs shrink-0">
-                    <ShieldCheck className="w-4 h-4" />
-                  </div>
-                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-emerald-950">
-                    {form.noticeBox.title}
-                  </h3>
-                </div>
-                <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Required Action
-                </span>
+            <div className="mb-6 p-4 sm:p-5 rounded-xl border" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
+              <div className="flex items-center gap-2 border-b border-amber-200 pb-2.5 mb-3">
+                <ShieldCheck className="w-4 h-4" style={{ color: '#92400e' }} />
+                <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#92400e' }}>{form.noticeBox.title}</h3>
               </div>
-
-              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-normal">
-                {form.noticeBox.description}
-              </p>
-
+              <p className="text-sm mb-3" style={{ color: '#78350f' }}>{form.noticeBox.description}</p>
               {form.noticeBox.bankDetails && (
-                <div className="mt-3 p-3.5 sm:p-4 bg-white/95 rounded-xl border border-emerald-200 shadow-2xs space-y-3">
-                  {/* Fee Amount Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-emerald-50/90 border border-emerald-200/80">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                      <CreditCard className="w-4 h-4 text-emerald-600" />
-                      Required Commitment Fee
+                <div className="bg-white rounded-xl border border-amber-200 p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#64748b' }}>
+                      <CreditCard className="w-4 h-4 inline mr-1" style={{ color: '#92400e' }} />
+                      Commitment Fee
                     </span>
-                    <span className="text-xl sm:text-2xl font-black font-mono text-emerald-700 tracking-tight">
-                      {form.noticeBox.bankDetails.amount}
-                    </span>
+                    <span className="text-2xl font-black font-mono" style={{ color: '#92400e' }}>{form.noticeBox.bankDetails.amount}</span>
                   </div>
-
-                  {/* Bank & Account Details */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                    <div className="p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                      <span className="text-slate-400 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">
-                        Banker & Account Name
-                      </span>
-                      <p className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
-                        <Building className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>{form.noticeBox.bankDetails.bankName}</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 rounded-lg" style={{ background: '#fafafa', border: '1px solid #f1f5f9' }}>
+                      <span className="text-[10px] font-bold uppercase tracking-wider block mb-0.5" style={{ color: '#94a3b8' }}>Bank & Name</span>
+                      <p className="font-bold flex items-center gap-1.5" style={{ color: '#1e293b' }}>
+                        <Building className="w-3.5 h-3.5" style={{ color: '#92400e' }} />
+                        {form.noticeBox.bankDetails.bankName}
                       </p>
-                      <p className="text-slate-600 text-[11px] font-medium mt-0.5">
-                        Name: <strong className="text-slate-800">{form.noticeBox.bankDetails.accountName}</strong>
-                      </p>
+                      <p className="mt-0.5" style={{ color: '#64748b' }}>Acct: <strong style={{ color: '#1e293b' }}>{form.noticeBox.bankDetails.accountName}</strong></p>
                     </div>
-
-                    <div className="p-2.5 bg-slate-50/80 rounded-lg border border-slate-100 flex flex-col justify-between">
-                      <span className="text-slate-400 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">
-                        GTBank Account Number
-                      </span>
-                      <div className="flex items-center justify-between gap-2 mt-1 bg-white p-1.5 rounded-lg border border-emerald-200/80 shadow-2xs">
-                        <span className="font-mono text-sm sm:text-base font-black tracking-wider text-slate-900 pl-1">
-                          {form.noticeBox.bankDetails.accountNumber}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyAccount(form.noticeBox!.bankDetails!.accountNumber)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
-                            copiedAccount
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
-                          }`}
-                        >
-                          {copiedAccount ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Copied!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>Copy</span>
-                            </>
-                          )}
+                    <div className="p-2.5 rounded-lg" style={{ background: '#fafafa', border: '1px solid #f1f5f9' }}>
+                      <span className="text-[10px] font-bold uppercase tracking-wider block mb-0.5" style={{ color: '#94a3b8' }}>Account Number</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="font-mono text-base font-black" style={{ color: '#1e293b' }}>{form.noticeBox.bankDetails.accountNumber}</span>
+                        <button type="button" onClick={() => handleCopyAccount(form.noticeBox!.bankDetails!.accountNumber)}
+                          className="px-2 py-1 rounded-md text-[11px] font-bold text-white transition-all" style={{ background: copiedAccount ? '#15803d' : '#92400e' }}>
+                          {copiedAccount ? <><Check className="w-3 h-3 inline" /> Copied</> : <><Copy className="w-3 h-3 inline" /> Copy</>}
                         </button>
                       </div>
                     </div>
@@ -337,87 +287,180 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
             </div>
           )}
 
-          {/* Dynamic Fields Form */}
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            {form.fields.map((field, idx) => {
-              if (!isFieldVisible(field)) return null;
+          {/* Form Fields */}
+          <form onSubmit={handleSubmit} noValidate>
+            <div className="space-y-5">
+              {form.fields.map((field) => {
+                if (!isFieldVisible(field)) return null;
+                const hasError = !!errors[field.id];
 
-              const hasError = !!errors[field.id];
+                let renderSectionHeader = false;
+                if (field.section && field.section !== currentSectionHeading) {
+                  currentSectionHeading = field.section;
+                  renderSectionHeader = true;
+                }
 
-              // Check if field has a section header that needs to be displayed
-              let renderSectionHeader = false;
-              if (field.section && field.section !== currentSectionHeading) {
-                currentSectionHeading = field.section;
-                renderSectionHeader = true;
-              }
+                // Special handling: replace signature text field with signature pad UI
+                if (isTenancyForm && field.id === 't-signature-fullname') {
+                  return (
+                    <React.Fragment key={field.id}>
+                      {renderSectionHeader && <SectionHeader title={currentSectionHeading} />}
+                      <div id={`field-${field.id}`} className="space-y-2">
+                        <label className="block text-sm font-semibold" style={{ color: '#1e293b' }}>
+                          Signature <span style={{ color: '#8B1A2A' }}>*</span>
+                        </label>
 
-              return (
-                <React.Fragment key={field.id}>
-                  {renderSectionHeader && (
-                    <div className="pt-4 pb-1.5 border-b border-slate-200 mt-6 mb-3">
-                      <h2 className="font-serif text-sm sm:text-base font-bold text-[#131B2E]">
-                        {currentSectionHeading}
-                      </h2>
+                        {signatureDataUrl ? (
+                          <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#bbf7d0', background: '#f0fdf4' }}>
+                            <div className="px-4 py-2 flex items-center justify-between border-b" style={{ borderColor: '#bbf7d0' }}>
+                              <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: '#15803d' }}>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Signature applied
+                              </div>
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => setShowSignaturePad(true)}
+                                  className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors" style={{ color: '#1B2A5C', borderColor: '#c7d2fe' }}>
+                                  <Eye className="w-3 h-3 inline mr-1" />Edit
+                                </button>
+                                <button type="button" onClick={() => setSignatureDataUrl(null)}
+                                  className="text-[11px] font-semibold px-2 py-1 rounded-lg border transition-colors" style={{ color: '#8B1A2A', borderColor: '#fecaca' }}>
+                                  <X className="w-3 h-3 inline" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="p-3 flex justify-center">
+                              <img src={signatureDataUrl} alt="Signature" className="max-h-20 object-contain" style={{ maxWidth: '100%' }} />
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowSignaturePad(true)}
+                            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-dashed transition-all text-sm font-semibold"
+                            style={{
+                              borderColor: errors['__signature__'] ? '#fca5a5' : '#cbd5e1',
+                              color: '#64748b',
+                              background: errors['__signature__'] ? '#fff5f5' : '#fafbfc',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = '#1B2A5C', e.currentTarget.style.color = '#1B2A5C')}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = errors['__signature__'] ? '#fca5a5' : '#cbd5e1', e.currentTarget.style.color = '#64748b')}
+                          >
+                            <PenLine className="w-4 h-4" />
+                            Click to Draw Your Signature
+                          </button>
+                        )}
+
+                        {errors['__signature__'] && (
+                          <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#8B1A2A' }}>
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            {errors['__signature__']}
+                          </p>
+                        )}
+                      </div>
+                    </React.Fragment>
+                  );
+                }
+
+                return (
+                  <React.Fragment key={field.id}>
+                    {renderSectionHeader && <SectionHeader title={currentSectionHeading} />}
+                    <div id={`field-${field.id}`} className="space-y-1">
+                      <label className="block text-sm font-semibold" style={{ color: '#1e293b' }}>
+                        {field.label}
+                        {field.required && <span className="font-bold ml-1" style={{ color: '#8B1A2A' }}>*</span>}
+                      </label>
+
+                      {renderFieldInput(field, formValues[field.id], (val) => handleInputChange(field.id, val),
+                        (optVal) => handleCheckboxToggle(field.id, optVal), (e) => handleFileUpload(field, e), hasError)}
+
+                      {field.helpText && !hasError && (
+                        <p className="text-xs flex items-center gap-1.5 mt-1" style={{ color: '#64748b' }}>
+                          <Info className="w-3.5 h-3.5 shrink-0" style={{ color: '#94a3b8' }} />
+                          {field.helpText}
+                        </p>
+                      )}
+                      {hasError && (
+                        <p className="text-xs font-medium flex items-center gap-1.5 mt-1" style={{ color: '#8B1A2A' }}>
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {errors[field.id]}
+                        </p>
+                      )}
                     </div>
-                  )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
 
-                  <div id={`field-${field.id}`} className="space-y-1">
-                    <label className="block text-xs sm:text-sm font-semibold text-slate-800">
-                      {field.label}
-                      {field.required && <span className="text-[#6E1E1E] font-bold ml-1">*</span>}
-                    </label>
-
-                    {/* Input Element */}
-                    {renderFieldInput(
-                      field,
-                      formValues[field.id],
-                      (val) => handleInputChange(field.id, val),
-                      (optVal) => handleCheckboxToggle(field.id, optVal),
-                      (e) => handleFileUpload(field, e),
-                      hasError
-                    )}
-
-                    {/* Help Text */}
-                    {field.helpText && !hasError && (
-                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
-                        <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{field.helpText}</span>
-                      </p>
-                    )}
-
-                    {/* Error Message */}
-                    {hasError && (
-                      <p className="text-xs text-[#6E1E1E] font-medium flex items-center gap-1.5 mt-1">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                        <span>{errors[field.id]}</span>
-                      </p>
-                    )}
+            {/* Submit */}
+            <div className="pt-8 mt-8 border-t border-gray-100">
+              {Object.keys(errors).length > 0 && (
+                <div className="mb-4 p-4 rounded-xl border text-xs" style={{ background: '#fff5f5', borderColor: '#fecaca', color: '#8B1A2A' }}>
+                  <div className="flex items-center gap-2 font-bold mb-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                    <span>Please complete the following required items before submitting:</span>
                   </div>
-                </React.Fragment>
-              );
-            })}
+                  <ul className="list-disc list-inside space-y-1 ml-1 text-slate-700">
+                    {Object.entries(errors).map(([fieldKey, errText]) => (
+                      <li key={fieldKey}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const targetId = fieldKey === '__signature__' ? 'field-t-signature-fullname' : `field-${fieldKey}`;
+                            const el = document.getElementById(targetId);
+                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }}
+                          className="hover:underline font-medium text-left text-red-800 cursor-pointer"
+                        >
+                          {errText}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
-            {/* Submit Button */}
-            <div className="pt-8 border-t border-slate-100 mt-10">
+              {!allFilled && Object.keys(errors).length === 0 && (
+                <p className="text-xs text-center mb-3 font-medium" style={{ color: '#94a3b8' }}>
+                  Complete all required fields{isTenancyForm ? ' and draw your signature' : ''} to submit
+                </p>
+              )}
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl text-sm font-semibold text-white bg-[#1D3557] hover:bg-[#162744] focus:outline-hidden focus:ring-2 focus:ring-[#1D3557] focus:ring-offset-2 transition-all shadow-md disabled:opacity-70"
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold text-white transition-all shadow-sm disabled:opacity-60 cursor-pointer"
+                style={{ background: '#1B2A5C' }}
+                onMouseEnter={e => !isSubmitting && (e.currentTarget.style.background = '#111c3e')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#1B2A5C')}
               >
                 {isSubmitting ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Submitting Details...</span>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Submitting...
                   </>
                 ) : (
                   <>
-                    <Send className="w-4 h-4 text-[#C5A059]" />
-                    <span>Submit Form to Jokdel Royal</span>
+                    <Send className="w-4 h-4" style={{ color: '#B8962E' }} />
+                    Submit Form to Jokdel Royal
                   </>
                 )}
               </button>
-              <p className="text-center text-xs text-slate-400 mt-3">
-                Your information is kept strictly confidential in accordance with Jokdel Royal Terms.
+
+              {/* Quick Test Demo Fill Helper */}
+              <div className="mt-4 pt-3 border-t border-dashed border-gray-200 text-center">
+                <button
+                  type="button"
+                  onClick={handleAutoFillDemo}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:text-[#1B2A5C] hover:border-[#1B2A5C] hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  ⚡ Auto-Fill Sample Data (Quick Test Fill)
+                </button>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Click to populate all required fields & documents instantly for testing submission.
+                </p>
+              </div>
+
+              <p className="text-center text-xs mt-3" style={{ color: '#94a3b8' }}>
+                Your information is kept strictly confidential.
               </p>
             </div>
           </form>
@@ -427,230 +470,117 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ form, onBack, onSubmit
   );
 };
 
+// Section Header sub-component
+const SectionHeader = ({ title }: { title: string }) => (
+  <div className="pt-4 mb-1">
+    <div className="jr-section-heading">{title}</div>
+  </div>
+);
+
+// Field input renderer
 function renderFieldInput(
-  field: FormField,
-  value: any,
+  field: FormField, value: any,
   onChange: (val: any) => void,
   onCheckboxToggle: (optVal: string) => void,
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void,
   hasError: boolean
 ) {
-  const baseInputClass = `w-full px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm bg-white border text-slate-800 transition-colors focus:outline-hidden ${
-    hasError
-      ? 'border-[#6E1E1E] focus:ring-1 focus:ring-[#6E1E1E]'
-      : 'border-slate-300 focus:border-[#131B2E] focus:ring-1 focus:ring-[#131B2E]'
+  const base = `w-full px-4 py-2.5 rounded-xl text-sm bg-white border transition-colors focus:outline-none ${
+    hasError ? 'border-red-300 bg-red-50/20' : 'border-gray-200'
   }`;
 
   switch (field.type) {
     case 'text':
-      return (
-        <input
-          type="text"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder || 'Enter response...'}
-          className={baseInputClass}
-        />
-      );
-
+      return <input type="text" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || ''} className={base} style={{ color: '#1e293b' }} />;
     case 'textarea':
-      return (
-        <textarea
-          rows={3}
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder || 'Enter details...'}
-          className={baseInputClass}
-        />
-      );
-
+      return <textarea rows={3} value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || ''} className={base} style={{ color: '#1e293b', resize: 'vertical' }} />;
     case 'email':
-      return (
-        <input
-          type="email"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder || 'e.g. name@example.com'}
-          className={baseInputClass}
-        />
-      );
-
+      return <input type="email" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || 'Enter email address'} className={base} style={{ color: '#1e293b' }} />;
     case 'phone':
-      return (
-        <input
-          type="tel"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder || 'e.g. 0816 215 3670'}
-          className={baseInputClass}
-        />
-      );
-
+      return <input type="tel" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || 'Enter phone number'} className={base} style={{ color: '#1e293b' }} />;
     case 'number':
-      return (
-        <input
-          type="number"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder || '0'}
-          className={baseInputClass}
-        />
-      );
-
+      return <input type="number" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || 'Enter number'} className={base} style={{ color: '#1e293b' }} />;
     case 'date':
-      return (
-        <input
-          type="date"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          className={baseInputClass}
-        />
-      );
-
+      return <input type="date" value={value || ''} onChange={e => onChange(e.target.value)} className={base} style={{ color: '#1e293b' }} />;
     case 'select':
       return (
-        <select
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          className={`${baseInputClass} bg-right`}
-        >
-          <option value="" disabled>
-            {field.placeholder || '-- Select an option --'}
-          </option>
-          {field.options?.map((opt) => (
-            <option key={opt.id} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
+        <select value={value || ''} onChange={e => onChange(e.target.value)} className={base} style={{ color: value ? '#1e293b' : '#94a3b8' }}>
+          <option value="" disabled style={{ color: '#94a3b8' }}>{field.placeholder || '— Select an option —'}</option>
+          {field.options?.map(opt => <option key={opt.id} value={opt.value}>{opt.label}</option>)}
         </select>
       );
-
     case 'radio':
       return (
         <div className="space-y-2 mt-1">
-          {field.options?.map((opt) => (
-            <label
-              key={opt.id}
-              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-                value === opt.value
-                  ? 'border-[#131B2E] bg-slate-50 font-medium'
-                  : 'border-slate-200 hover:bg-slate-50/60'
-              }`}
-            >
-              <input
-                type="radio"
-                name={field.id}
-                value={opt.value}
-                checked={value === opt.value}
-                onChange={() => onChange(opt.value)}
-                className="mt-0.5 text-[#131B2E] focus:ring-[#131B2E]"
-              />
-              <span className="text-sm text-slate-700">{opt.label}</span>
+          {field.options?.map(opt => (
+            <label key={opt.id} className="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors"
+              style={{ borderColor: value === opt.value ? '#1B2A5C' : '#e2e8f0', background: value === opt.value ? 'rgba(27,42,92,0.04)' : 'white' }}>
+              <input type="radio" name={field.id} value={opt.value} checked={value === opt.value} onChange={() => onChange(opt.value)} className="mt-0.5" />
+              <span className="text-sm" style={{ color: '#1e293b' }}>{opt.label}</span>
             </label>
           ))}
         </div>
       );
-
-    case 'checkbox':
-      const selectedList: string[] = Array.isArray(value) ? value : [];
+    case 'checkbox': {
+      const sel: string[] = Array.isArray(value) ? value : [];
       return (
         <div className="space-y-2 mt-1">
-          {field.options?.map((opt) => {
-            const isChecked = selectedList.includes(opt.value);
+          {field.options?.map(opt => {
+            const checked = sel.includes(opt.value);
             return (
-              <label
-                key={opt.id}
-                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-                  isChecked
-                    ? 'border-[#131B2E] bg-slate-50 font-medium'
-                    : 'border-slate-200 hover:bg-slate-50/60'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={() => onCheckboxToggle(opt.value)}
-                  className="mt-0.5 rounded-sm text-[#131B2E] focus:ring-[#131B2E]"
-                />
-                <span className="text-sm text-slate-700">{opt.label}</span>
+              <label key={opt.id} className="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors"
+                style={{ borderColor: checked ? '#1B2A5C' : '#e2e8f0', background: checked ? 'rgba(27,42,92,0.04)' : 'white' }}>
+                <input type="checkbox" checked={checked} onChange={() => onCheckboxToggle(opt.value)} className="mt-0.5 rounded" />
+                <span className="text-sm" style={{ color: '#1e293b' }}>{opt.label}</span>
               </label>
             );
           })}
         </div>
       );
-
+    }
     case 'file':
-    case 'image':
+    case 'image': {
       const fileData: FileDataValue | null = value && typeof value === 'object' ? value : null;
-      const isImage = field.type === 'image' || field.accept?.includes('image');
-
+      const isImg = field.type === 'image' || field.accept?.includes('image');
       return (
         <div className="mt-1">
           {fileData ? (
-            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between gap-3">
+            <div className="p-4 rounded-xl border flex items-center justify-between gap-3" style={{ borderColor: '#bbf7d0', background: '#f0fdf4' }}>
               <div className="flex items-center gap-3 overflow-hidden">
-                {isImage && fileData.dataUrl ? (
-                  <img
-                    src={fileData.dataUrl}
-                    alt={fileData.fileName}
-                    className="w-12 h-12 object-cover rounded-lg border border-emerald-300 shrink-0"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                )}
+                {isImg && fileData.dataUrl
+                  ? <img src={fileData.dataUrl} alt={fileData.fileName} className="w-12 h-12 object-cover rounded-lg border border-green-200 shrink-0" />
+                  : <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#dcfce7', color: '#15803d' }}><FileText className="w-5 h-5" /></div>
+                }
                 <div className="truncate">
-                  <p className="text-xs font-bold text-slate-800 truncate">{fileData.fileName}</p>
-                  <p className="text-[11px] text-emerald-700 flex items-center gap-1 mt-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Uploaded ({fileData.fileSizeMb} MB)</span>
+                  <p className="text-xs font-bold truncate" style={{ color: '#1e293b' }}>{fileData.fileName}</p>
+                  <p className="text-[11px] flex items-center gap-1 mt-0.5" style={{ color: '#15803d' }}>
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Uploaded ({fileData.fileSizeMb} MB)
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => onChange('')}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-white transition-colors"
-                title="Remove file"
-              >
+              <button type="button" onClick={() => onChange('')} className="p-1.5 rounded-lg transition-colors" style={{ color: '#94a3b8' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#8B1A2A')} onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
                 <X className="w-4 h-4" />
               </button>
             </div>
           ) : (
-            <label
-              className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer hover:bg-slate-50 transition-colors ${
-                hasError ? 'border-red-300 bg-red-50/20' : 'border-slate-300'
-              }`}
+            <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-colors"
+              style={{ borderColor: hasError ? '#fca5a5' : '#e2e8f0', background: hasError ? '#fff5f5' : '#fafbfc' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#1B2A5C', e.currentTarget.style.background = 'rgba(27,42,92,0.03)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = hasError ? '#fca5a5' : '#e2e8f0', e.currentTarget.style.background = hasError ? '#fff5f5' : '#fafbfc')}
             >
-              <input
-                type="file"
-                accept={field.accept || (isImage ? 'image/*' : '.pdf,.jpg,.png,.jpeg')}
-                onChange={onFileUpload}
-                className="hidden"
-              />
-              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-[#131B2E] mb-2">
-                {isImage ? <ImageIcon className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
+              <input type="file" accept={field.accept || (isImg ? 'image/*' : '.pdf,.jpg,.png,.jpeg')} onChange={onFileUpload} className="hidden" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2" style={{ background: '#f1f5f9', color: '#1B2A5C' }}>
+                {isImg ? <ImageIcon className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
               </div>
-              <p className="text-xs font-bold text-slate-700">
-                Click to select or drag file here
-              </p>
-              <p className="text-[11px] text-slate-400 mt-1">
-                {isImage ? 'JPG or PNG format' : 'PDF, JPG or PNG'} (Max limit: {field.maxSizeMb || 5}MB)
-              </p>
+              <p className="text-xs font-semibold" style={{ color: '#475569' }}>Click to upload or drag file here</p>
+              <p className="text-[11px] mt-1" style={{ color: '#94a3b8' }}>{isImg ? 'JPG or PNG' : 'PDF, JPG or PNG'} — max {field.maxSizeMb || 5}MB</p>
             </label>
           )}
         </div>
       );
-
+    }
     default:
-      return (
-        <input
-          type="text"
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          className={baseInputClass}
-        />
-      );
+      return <input type="text" value={value || ''} onChange={e => onChange(e.target.value)} className={base} style={{ color: '#1e293b' }} />;
   }
 }

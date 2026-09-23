@@ -1,17 +1,9 @@
 import React, { useState } from 'react';
+import { Logo } from '../Logo';
 import { FormResponse } from '../../types';
 import {
-  LayoutDashboard,
-  FileSpreadsheet,
-  Users,
-  Settings,
-  LogOut,
-  ExternalLink,
-  Menu,
-  X,
-  Bell,
-  PlusCircle,
-  Home
+  LayoutDashboard, FileSpreadsheet, Users, Settings,
+  LogOut, ExternalLink, Menu, X, Home,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -25,176 +17,127 @@ interface AdminLayoutProps {
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
-  activeTab,
-  setActiveTab,
-  responses,
-  onLogout,
-  onViewPublicSite,
-  onOpenNewFormBuilder,
-  children,
+  activeTab, setActiveTab, responses, onLogout, onViewPublicSite, onOpenNewFormBuilder, children,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   const newLeadsCount = responses.filter((r) => r.status === 'New').length;
 
   const navItems = [
-    {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: <LayoutDashboard className="w-5 h-5" />,
-    },
-    {
-      id: 'forms',
-      label: 'Forms Manager',
-      icon: <FileSpreadsheet className="w-5 h-5" />,
-    },
-    {
-      id: 'responses',
-      label: 'Responses & Leads',
-      icon: <Users className="w-5 h-5" />,
-      badge: newLeadsCount > 0 ? newLeadsCount : null,
-    },
-    {
-      id: 'settings',
-      label: 'Company Settings',
-      icon: <Settings className="w-5 h-5" />,
-    },
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'forms',     label: 'Forms Manager', icon: <FileSpreadsheet className="w-4 h-4" /> },
+    { id: 'responses', label: 'Responses',     icon: <Users className="w-4 h-4" />, badge: newLeadsCount > 0 ? newLeadsCount : null },
+    { id: 'settings',  label: 'Settings',      icon: <Settings className="w-4 h-4" /> },
   ];
 
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="px-5 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+        <div className="flex items-center justify-between">
+          <div className="bg-white rounded-lg px-2 py-1.5 flex items-center">
+            <Logo height={36} />
+          </div>
+          <button onClick={() => setMobileMenuOpen(false)} className="md:hidden p-1 rounded-lg hover:bg-white/10">
+            <X className="w-5 h-5 text-white/60" />
+          </button>
+        </div>
+        <p className="text-[10px] font-semibold uppercase tracking-widest mt-3" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          CRM Admin Panel
+        </p>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {navItems.map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => { setActiveTab(item.id as any); setMobileMenuOpen(false); }}
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
+              style={{
+                background: isActive ? 'rgba(255,255,255,0.12)' : 'transparent',
+                color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
+                borderLeft: isActive ? '3px solid #B8962E' : '3px solid transparent',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <div className="flex items-center gap-3">
+                <span style={{ color: isActive ? '#B8962E' : 'rgba(255,255,255,0.45)' }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </div>
+              {item.badge != null && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full text-white" style={{ background: '#8B1A2A' }}>
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-3 py-4 border-t space-y-1" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+        <button
+          onClick={onViewPublicSite}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
+          style={{ color: 'rgba(255,255,255,0.5)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <Home className="w-4 h-4" />
+          <span>Public Form Site</span>
+          <ExternalLink className="w-3.5 h-3.5 ml-auto" />
+        </button>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
+          style={{ color: 'rgba(255,255,255,0.5)' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#fca5a5', e.currentTarget.style.background = 'rgba(139,26,42,0.15)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)', e.currentTarget.style.background = 'transparent')}
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row">
-      {/* Mobile Top Header */}
-      <div className="md:hidden bg-[#131B2E] text-white p-4 flex items-center justify-between border-b border-slate-800 sticky top-0 z-40">
-        <div className="flex flex-col leading-tight">
-          <span className="font-serif font-bold text-white text-lg tracking-wider">JOKDEL ROYAL</span>
-          <span className="text-[10px] text-slate-400 tracking-widest uppercase">Admin Panel</span>
+    <div className="min-h-screen flex flex-col md:flex-row" style={{ background: '#F7F8FA' }}>
+      {/* Mobile top bar */}
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-40">
+        <div className="bg-white rounded-lg">
+          <Logo height={36} />
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={onViewPublicSite}
-            className="p-2 text-slate-300 hover:text-white"
-            title="View Public Form Site"
-          >
-            <ExternalLink className="w-5 h-5" />
+          <button onClick={onViewPublicSite} className="p-2 text-gray-400 hover:text-gray-600">
+            <ExternalLink className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-slate-300 hover:text-white"
-          >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-gray-400 hover:text-gray-600">
+            <Menu className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* Desktop / Mobile Sidebar Overlay */}
-      <aside
-        className={`fixed md:sticky top-0 inset-y-0 left-0 z-50 w-64 bg-[#131B2E] text-white flex flex-col justify-between p-4 transition-transform duration-200 ease-in-out md:translate-x-0 ${
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
-      >
-        <div>
-          {/* Logo Section */}
-          <div className="px-2 py-4 border-b border-slate-800/80 mb-6 flex items-center justify-between">
-            <div className="flex flex-col leading-tight">
-              <span className="font-serif font-bold text-white text-xl tracking-wider">JOKDEL ROYAL</span>
-              <span className="text-[10px] text-slate-400 tracking-widest uppercase mt-0.5">CRM Admin Panel</span>
-            </div>
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="md:hidden p-1 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Quick Add Form Action */}
-          <div className="px-2 mb-6">
-            <button
-              onClick={() => {
-                onOpenNewFormBuilder();
-                setMobileMenuOpen(false);
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-[#6E1E1E] hover:bg-[#852525] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
-            >
-              <PlusCircle className="w-4 h-4 text-[#C5A059]" />
-              <span>Create New Form</span>
-            </button>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="space-y-1.5 px-2">
-            <p className="px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase mb-2">
-              Management Menu
-            </p>
-            {navItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id as any);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                    isActive
-                      ? 'bg-slate-800 text-white shadow-xs border-l-4 border-[#C5A059]'
-                      : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={isActive ? 'text-[#C5A059]' : 'text-slate-400'}>
-                      {item.icon}
-                    </span>
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge !== null && item.badge !== undefined && (
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-[#6E1E1E] text-white">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Public Site Switcher */}
-          <div className="mt-8 px-2">
-            <button
-              onClick={onViewPublicSite}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800/60 hover:text-white border border-slate-700/60 transition-colors"
-            >
-              <Home className="w-4 h-4 text-slate-400" />
-              <span>Public Form Site</span>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-400 ml-auto" />
-            </button>
-          </div>
+      {/* Mobile menu overlay */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setMobileMenuOpen(false)} />
+          <aside className="relative w-64 h-full" style={{ background: '#1B2A5C' }}>
+            <SidebarContent />
+          </aside>
         </div>
+      )}
 
-        {/* Footer Admin User & Logout */}
-        <div className="pt-4 border-t border-slate-800 px-2 mt-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold text-xs text-[#C5A059] shrink-0">
-                JR
-              </div>
-              <div className="truncate">
-                <p className="text-xs font-bold text-white truncate">Staff Admin</p>
-                <p className="text-[10px] text-slate-400 truncate">Jokdel Royal Real Estate</p>
-              </div>
-            </div>
-            <button
-              onClick={onLogout}
-              className="p-2 text-slate-400 hover:text-rose-300 hover:bg-slate-800 rounded-lg transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-56 shrink-0 min-h-screen sticky top-0" style={{ background: '#1B2A5C' }}>
+        <SidebarContent />
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto overflow-y-auto">
+      {/* Main content */}
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 min-h-screen overflow-y-auto">
         {children}
       </main>
     </div>

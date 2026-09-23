@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
-import { FormConfig, FormResponse, ResponseStatus, StaffNote, FileDataValue } from '../../types';
+import { FormConfig, FormResponse, ResponseStatus, FileDataValue, CompanySettings } from '../../types';
+import { LetterheadPDF, printLetterhead } from './LetterheadPDF';
 import {
-  Download,
-  Search,
-  Eye,
-  MessageSquare,
-  FileSpreadsheet,
-  X,
-  FileText,
-  Image as ImageIcon,
-  ExternalLink,
+  Download, Search, Eye, MessageSquare, FileSpreadsheet, X, FileText,
+  Image as ImageIcon, Printer,
 } from 'lucide-react';
 
 interface AdminResponsesProps {
@@ -20,6 +14,7 @@ interface AdminResponsesProps {
   onAddNote: (responseId: string, noteContent: string) => void;
   selectedResponseDetail: FormResponse | null;
   onSelectResponseDetail: (response: FormResponse | null) => void;
+  settings?: CompanySettings;
 }
 
 export const AdminResponses: React.FC<AdminResponsesProps> = ({
@@ -30,12 +25,27 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
   onAddNote,
   selectedResponseDetail,
   onSelectResponseDetail,
+  settings,
 }) => {
+
   const [searchQuery, setSearchQuery] = useState('');
   const [formFilter, setFormFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter);
   const [newNoteText, setNewNoteText] = useState('');
   const [previewImageModal, setPreviewImageModal] = useState<{ name: string; url: string } | null>(null);
+  const [showLetterheadModal, setShowLetterheadModal] = useState(false);
+
+  const defaultSettings: CompanySettings = {
+    companyName: 'Jokdel Royal Nig. Ltd',
+    address: 'No. 4 Yakubu Gowon Crescent, Asokoro, Abuja, FCT, Nigeria',
+    phone: '+234 816 215 3670',
+    email: 'info@jokdelroyal.com',
+    whatsappNumber: '+2348162153670',
+    tagline: 'Building Trust, Creating Legacies',
+    enableEmailNotifications: false,
+    workingHours: 'Mon – Fri: 8am – 6pm',
+  };
+  const activeSettings = settings || defaultSettings;
 
   const statusOptions: ResponseStatus[] = [
     'New',
@@ -210,7 +220,7 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
               }}
               className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-[#131B2E] hover:text-white text-slate-700 text-[11px] font-bold transition-colors inline-flex items-center gap-1 shrink-0"
             >
-              <ExternalLink className="w-3 h-3" />
+              <Eye className="w-3 h-3" />
               <span>View</span>
             </button>
           )}
@@ -230,16 +240,19 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
       {/* Header & Export Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-[#131B2E]">Responses & CRM Leads</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Manage submissions, review uploaded passport photos & receipt documents, and update client pipeline.
+          <h1 className="font-serif text-xl font-bold" style={{ color: '#1B2A5C' }}>Responses & CRM Leads</h1>
+          <p className="text-xs mt-1" style={{ color: '#64748b' }}>
+            Manage submissions, update client pipeline status and download letterhead PDFs.
           </p>
         </div>
         <button
           onClick={handleExportCSV}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#1D3557] hover:bg-[#162744] transition-colors shadow-xs"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white transition-colors"
+          style={{ background: '#1B2A5C' }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#111c3e')}
+          onMouseLeave={e => (e.currentTarget.style.background = '#1B2A5C')}
         >
-          <Download className="w-4 h-4 text-[#C5A059]" />
+          <Download className="w-4 h-4" style={{ color: '#B8962E' }} />
           <span>Export CSV ({filteredResponses.length})</span>
         </button>
       </div>
@@ -389,28 +402,62 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
 
       {/* Detail View Modal */}
       {selectedResponseDetail && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex justify-end">
+        <>
+          {/* Letterhead Print Area (hidden on screen, visible on print) */}
+          {showLetterheadModal && (() => {
+            const detailForm = forms.find(f => f.id === selectedResponseDetail.formId);
+            if (!detailForm) return null;
+            return (
+              <div className="fixed inset-0 z-[100] bg-white overflow-auto no-print" id="letterhead-modal">
+                <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-gray-50 no-print">
+                  <h3 className="font-semibold text-sm" style={{ color: '#1B2A5C' }}>Letterhead Preview — {selectedResponseDetail.submitterName}</h3>
+                  <div className="flex gap-3">
+                    <button onClick={() => { setShowLetterheadModal(false); setTimeout(printLetterhead, 100); }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: '#1B2A5C' }}>
+                      <Printer className="w-4 h-4" /> Print / Save PDF
+                    </button>
+                    <button onClick={() => setShowLetterheadModal(false)} className="px-4 py-2 rounded-lg text-sm border" style={{ color: '#64748b', borderColor: '#e2e8f0' }}>
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <LetterheadPDF response={selectedResponseDetail} form={detailForm} settings={activeSettings} />
+              </div>
+            );
+          })()}
+
+          <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex justify-end">
           <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col justify-between overflow-y-auto">
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="p-5 border-b border-gray-100 flex items-start justify-between bg-white">
               <div>
-                <span className="text-[10px] font-bold text-[#6E1E1E] uppercase tracking-wider">
-                  Lead Reference: {selectedResponseDetail.id}
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#8B1A2A' }}>
+                  Ref: {selectedResponseDetail.id}
                 </span>
-                <h2 className="font-serif text-xl font-bold text-[#131B2E]">
+                <h2 className="font-serif text-lg font-bold mt-0.5" style={{ color: '#1B2A5C' }}>
                   {selectedResponseDetail.submitterName}
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Form: {selectedResponseDetail.formTitle}
+                <p className="text-xs" style={{ color: '#64748b' }}>
+                  {selectedResponseDetail.formTitle}
                 </p>
               </div>
-              <button
-                onClick={() => onSelectResponseDetail(null)}
-                className="p-2 text-slate-400 hover:text-slate-800 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedResponseDetail.formId === 'form-tenancy-data' && (
+                  <button
+                    onClick={() => setShowLetterheadModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors"
+                    style={{ borderColor: '#cbd5e1', color: '#1B2A5C', background: '#f8fafc' }}
+                    title="Print as Letterhead PDF"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> Letterhead
+                  </button>
+                )}
+                <button onClick={() => onSelectResponseDetail(null)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                  <X className="w-5 h-5" style={{ color: '#94a3b8' }} />
+                </button>
+              </div>
             </div>
+
 
             {/* Modal Body */}
             <div className="p-6 space-y-6 flex-1 overflow-y-auto">
@@ -521,7 +568,7 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
                       type="text"
                       value={newNoteText}
                       onChange={(e) => setNewNoteText(e.target.value)}
-                      placeholder="Add follow-up note (e.g. Verified N20,000 receipt, called client...)"
+                      placeholder="Enter follow-up note..."
                       className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-hidden focus:border-[#131B2E]"
                     />
                     <button
@@ -547,7 +594,9 @@ export const AdminResponses: React.FC<AdminResponsesProps> = ({
             </div>
           </div>
         </div>
+        </>
       )}
+
 
       {/* Image Preview Overlay Modal */}
       {previewImageModal && (

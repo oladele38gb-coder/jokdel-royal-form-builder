@@ -1,6 +1,7 @@
 import React from 'react';
+import { Logo } from './Logo';
 import { FormConfig, FormResponse, CompanySettings } from '../types';
-import { CheckCircle, Phone, MessageSquare, ArrowLeft, Home, Building, FileText, Share2 } from 'lucide-react';
+import { CheckCircle, MessageSquare, Home, Phone, Shield } from 'lucide-react';
 
 interface FormSuccessScreenProps {
   form: FormConfig;
@@ -10,112 +11,121 @@ interface FormSuccessScreenProps {
 }
 
 export const FormSuccessScreen: React.FC<FormSuccessScreenProps> = ({
-  form,
-  response,
-  companySettings,
-  onBackToHome,
+  form, response, companySettings, onBackToHome,
 }) => {
-  // Format WhatsApp Link
   const whatsappMsg = encodeURIComponent(
-    `Hello Jokdel Royal,\nI just submitted an inquiry form on your website.\n\n` +
-      `*Reference Code:* ${response.id}\n` +
-      `*Form:* ${form.title}\n` +
-      `*Name:* ${response.submitterName}\n` +
-      `*Phone:* ${response.submitterPhone}\n\n` +
-      `I would like to follow up on my request.`
+    `Hello Jokdel Royal,\nI just submitted a form on your website.\n\n` +
+    `*Reference:* ${response.id}\n` +
+    `*Form:* ${form.title}\n` +
+    `*Name:* ${response.submitterName}\n\n` +
+    `Please confirm receipt. Thank you.`
   );
-
   const whatsappUrl = `https://wa.me/${companySettings.whatsappNumber.replace(/\D/g, '')}?text=${whatsappMsg}`;
 
   return (
-    <div className="py-6 sm:py-12 px-3 sm:px-6 lg:px-8 max-w-2xl mx-auto">
-      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-10 text-center">
-        {/* Success Icon */}
-        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 text-emerald-600">
-          <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10" />
-        </div>
+    <div className="min-h-[80vh] flex items-center justify-center py-8 px-4">
+      <div className="w-full max-w-md animate-fade-in-up">
 
-        <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-100 text-[#131B2E] text-[10px] sm:text-xs font-bold tracking-wider uppercase mb-2">
-          Reference Code: {response.id}
-        </span>
-
-        <h1 className="font-serif text-lg sm:text-2xl font-bold text-[#131B2E] tracking-tight">
-          Thank You — Inquiry Received!
-        </h1>
-
-        <p className="mt-2 text-xs sm:text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
-          Your response for <strong className="text-slate-800">{form.title}</strong> has been logged. A Jokdel Royal property advisor will review your details shortly.
-        </p>
-
-        {/* WhatsApp Quick Action Fallback */}
-        <div className="my-5 sm:my-8 p-3.5 sm:p-5 bg-emerald-50/80 border border-emerald-200 rounded-xl sm:rounded-2xl text-left">
-          <div className="flex items-start gap-2.5">
-            <div className="p-2 bg-emerald-600 text-white rounded-lg shrink-0 mt-0.5">
-              <MessageSquare className="w-4 h-4" />
+        {/* Top Card — Navy Hero */}
+        <div className="rounded-2xl overflow-hidden shadow-md border border-gray-100">
+          <div className="px-6 py-10 text-center" style={{ background: '#1B2A5C' }}>
+            {/* Logo */}
+            <div className="inline-flex bg-white rounded-xl px-4 py-2 mb-6">
+              <Logo height={40} />
             </div>
-            <div>
-              <h3 className="text-xs sm:text-sm font-bold text-emerald-900">
-                Need Faster Assistance? Connect via WhatsApp
-              </h3>
-              <p className="text-[11px] sm:text-xs text-emerald-700 mt-0.5 leading-relaxed">
-                Click below to open WhatsApp and send your submission reference directly to our on-call agent.
-              </p>
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-2xs"
-              >
-                <span>Chat with Jokdel Royal on WhatsApp</span>
-                <Share2 className="w-3.5 h-3.5" />
-              </a>
+
+            {/* Check icon */}
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 animate-check-pop"
+              style={{ background: 'rgba(184,150,46,0.15)', border: '2px solid #B8962E' }}
+            >
+              <CheckCircle className="w-8 h-8" style={{ color: '#B8962E' }} />
             </div>
+
+            <h1 className="font-serif text-xl font-bold text-white mb-1">
+              Form Submitted Successfully
+            </h1>
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>
+              {form.title}
+            </p>
+
+            {/* Reference badge */}
+            <div className="inline-block mt-4 px-4 py-1.5 rounded-full text-xs font-bold tracking-widest" style={{ background: 'rgba(184,150,46,0.18)', color: '#d4ae4a' }}>
+              REF: {response.id}
+            </div>
+          </div>
+
+          {/* White body */}
+          <div className="bg-white px-6 py-6">
+            <p className="text-sm text-center mb-5" style={{ color: '#64748b' }}>
+              Your submission has been received. A Jokdel Royal advisor will review your details and be in touch shortly.
+            </p>
+
+            {/* Summary */}
+            <div className="rounded-xl border border-gray-100 overflow-hidden mb-5">
+              <div className="px-4 py-2 border-b border-gray-100" style={{ background: '#f8fafc' }}>
+                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#94a3b8' }}>Submission Summary</p>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {[
+                  ['Name', response.submitterName],
+                  ['Phone', response.submitterPhone],
+                  ['Email', response.submitterEmail],
+                  ['Date', new Date(response.submittedAt).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between items-center px-4 py-2.5 text-sm">
+                    <span style={{ color: '#94a3b8' }}>{label}</span>
+                    <span className="font-semibold text-right" style={{ color: '#1e293b', maxWidth: '60%', wordBreak: 'break-word' }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* WhatsApp CTA */}
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold mb-3 transition-all border"
+              style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#dcfce7')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#f0fdf4')}
+            >
+              <MessageSquare className="w-4 h-4 shrink-0" />
+              <span>Follow up on WhatsApp</span>
+            </a>
+
+            {/* Return home */}
+            <button
+              onClick={onBackToHome}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-all cursor-pointer mb-2.5"
+              style={{ background: '#1B2A5C' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#111c3e')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#1B2A5C')}
+            >
+              <Home className="w-4 h-4" style={{ color: '#B8962E' }} />
+              Return to All Services
+            </button>
+
+            {/* View in Admin */}
+            <a
+              href="/admin"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold border transition-all text-slate-700 bg-slate-50 hover:bg-slate-100 hover:text-[#1B2A5C] border-slate-200"
+            >
+              <Shield className="w-3.5 h-3.5 text-[#B8962E]" />
+              <span>Open Admin Panel to View Submission →</span>
+            </a>
           </div>
         </div>
 
-        {/* Summary of Submitted Information */}
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-left mb-8">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-            Inquiry Submission Summary
-          </h3>
-          <div className="space-y-2 text-xs sm:text-sm">
-            <div className="flex justify-between py-1 border-b border-slate-200/60">
-              <span className="text-slate-500 font-medium">Submitter Name:</span>
-              <span className="font-semibold text-slate-800">{response.submitterName}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-slate-200/60">
-              <span className="text-slate-500 font-medium">Contact Phone:</span>
-              <span className="font-semibold text-slate-800">{response.submitterPhone}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-slate-200/60">
-              <span className="text-slate-500 font-medium">Contact Email:</span>
-              <span className="font-semibold text-slate-800">{response.submitterEmail}</span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-slate-500 font-medium">Date & Time:</span>
-              <span className="font-semibold text-slate-800">
-                {new Date(response.submittedAt).toLocaleString()}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Company Info Box */}
-        <div className="text-xs text-slate-500 space-y-1 mb-8">
-          <p className="font-semibold text-slate-700">{companySettings.companyName}</p>
-          <p>{companySettings.address}</p>
-          <p>Direct Line: {companySettings.phone} | Email: {companySettings.email}</p>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <button
-            onClick={onBackToHome}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-[#131B2E] hover:bg-slate-800 transition-colors"
-          >
-            <Home className="w-4 h-4 text-[#C5A059]" />
-            <span>Return to Home & All Services</span>
-          </button>
+        {/* Company footer */}
+        <div className="text-center mt-5 space-y-1">
+          <p className="text-xs font-semibold" style={{ color: '#475569' }}>{companySettings.companyName}</p>
+          <p className="text-xs" style={{ color: '#94a3b8' }}>{companySettings.address}</p>
+          <a href={`tel:${companySettings.phone}`} className="inline-flex items-center gap-1 text-xs" style={{ color: '#94a3b8' }}>
+            <Phone className="w-3 h-3" />
+            {companySettings.phone}
+          </a>
         </div>
       </div>
     </div>

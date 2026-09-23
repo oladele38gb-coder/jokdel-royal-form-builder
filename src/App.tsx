@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import logoImg from '../assets/jokdel_royal_logo.jpg';
+import letterheadLogo from '../assets/jokdel_royal_letterhead_logo.png';
 import {
   FormConfig,
   FormResponse,
@@ -36,11 +36,12 @@ import { AdminResponses } from './components/admin/AdminResponses';
 import { AdminSettings } from './components/admin/AdminSettings';
 
 const STORAGE_KEYS = {
-  FORMS: 'jokdel_forms_v3',
-  RESPONSES: 'jokdel_responses_v3',
+  FORMS: 'jokdel_forms_v4',
   SETTINGS: 'jokdel_settings_v3',
   AUTH: 'jokdel_auth_v3',
 };
+
+const API_BASE = 'http://localhost:3002/api';
 
 // ─── Shared State Hook ────────────────────────────────────────────────────────
 function useAppState() {
@@ -69,12 +70,25 @@ function useAppState() {
     } catch { return INITIAL_FORMS; }
   });
 
-  const [responses, setResponses] = useState<FormResponse[]>(() => {
+  const [responses, setResponses] = useState<FormResponse[]>([]);
+  const [loadingResponses, setLoadingResponses] = useState(false);
+
+  // Load responses from Express API
+  const fetchResponses = useCallback(async () => {
+    setLoadingResponses(true);
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.RESPONSES);
-      return saved ? JSON.parse(saved) : INITIAL_RESPONSES;
-    } catch { return INITIAL_RESPONSES; }
-  });
+      const res = await fetch(`${API_BASE}/responses`);
+      if (res.ok) setResponses(await res.json());
+    } catch (e) {
+      console.warn('API offline — using localStorage fallback.');
+      try {
+        const saved = localStorage.getItem('jokdel_responses_v3');
+        if (saved) setResponses(JSON.parse(saved));
+      } catch {}
+    } finally {
+      setLoadingResponses(false);
+    }
+  }, []);
 
   const [settings, setSettings] = useState<CompanySettings>(() => {
     try {
@@ -83,17 +97,20 @@ function useAppState() {
     } catch { return INITIAL_COMPANY_SETTINGS; }
   });
 
+  useEffect(() => { fetchResponses(); }, [fetchResponses]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.FORMS, JSON.stringify(forms)); }, [forms]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.RESPONSES, JSON.stringify(responses)); }, [responses]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
   useEffect(() => {
     if (adminUser) localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(adminUser));
     else localStorage.removeItem(STORAGE_KEYS.AUTH);
   }, [adminUser]);
 
+
+
   const handleAdminLogin = (email: string) => {
     setAdminUser({ email, name: 'Staff Admin', role: 'Property Manager', isAuthenticated: true });
   };
+
 
   const handleAdminLogout = () => { setAdminUser(null); };
 
@@ -131,45 +148,50 @@ function useAppState() {
     setForms((prev) => prev.filter((f) => f.id !== formId));
   };
 
-  const handleUpdateResponseStatus = (responseId: string, newStatus: ResponseStatus) => {
-    setResponses((prev) =>
-      prev.map((r) => {
-        if (r.id !== responseId) return r;
-        const statusNote: StaffNote = {
-          id: `note-${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          author: adminUser?.name || 'Staff Admin',
-          content: `Pipeline status changed to "${newStatus}".`,
-        };
-        return { ...r, status: newStatus, notes: [...r.notes, statusNote] };
-      })
-    );
+  const handleUpdateResponseStatus = async (responseId: string, newStatus: ResponseStatus) => {
+    const statusNote: StaffNote = {
+      id: `note-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      author: adminUser?.name || 'Staff Admin',
+      content: `Pipeline status changed to "${newStatus}".`,
+    };
+    // Optimistic update
+    setResponses((prev) => prev.map((r) => r.id !== responseId ? r : { ...r, status: newStatus, notes: [...r.notes, statusNote] }));
     if (selectedResponseDetail?.id === responseId) {
-      setSelectedResponseDetail((prev) => prev ? { ...prev, status: newStatus } : null);
+      setSelectedResponseDetail((prev) => prev ? { ...prev, status: newStatus, notes: [...prev.notes, statusNote] } : null);
     }
+    try {
+      await fetch(`${API_BASE}/responses/${responseId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch { console.warn('API offline — status update saved locally only.'); }
   };
 
-  const handleAddResponseNote = (responseId: string, noteContent: string) => {
+  const handleAddResponseNote = async (responseId: string, noteContent: string) => {
     const newNote: StaffNote = {
       id: `note-${Date.now()}`,
       createdAt: new Date().toISOString(),
       author: adminUser?.name || 'Staff Admin',
       content: noteContent,
     };
-    setResponses((prev) =>
-      prev.map((r) => r.id !== responseId ? r : { ...r, notes: [...r.notes, newNote] })
-    );
+    setResponses((prev) => prev.map((r) => r.id !== responseId ? r : { ...r, notes: [...r.notes, newNote] }));
     if (selectedResponseDetail?.id === responseId) {
       setSelectedResponseDetail((prev) => prev ? { ...prev, notes: [...prev.notes, newNote] } : null);
     }
+    try {
+      await fetch(`${API_BASE}/responses/${responseId}/notes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: noteContent, author: adminUser?.name || 'Staff Admin' }),
+      });
+    } catch { console.warn('API offline — note saved locally only.'); }
   };
 
   const handleResetSampleData = () => {
     setForms(INITIAL_FORMS);
-    setResponses(INITIAL_RESPONSES);
+    setResponses([]);
     setSettings(INITIAL_COMPANY_SETTINGS);
     localStorage.removeItem(STORAGE_KEYS.FORMS);
-    localStorage.removeItem(STORAGE_KEYS.RESPONSES);
     localStorage.removeItem(STORAGE_KEYS.SETTINGS);
   };
 
@@ -181,6 +203,7 @@ function useAppState() {
     responsesStatusFilter, setResponsesStatusFilter,
     adminUser,
     forms, responses, setResponses, settings, setSettings,
+    loadingResponses, fetchResponses,
     handleAdminLogin, handleAdminLogout,
     handleSaveForm, handleDuplicateForm, handleToggleFormActive, handleDeleteForm,
     handleUpdateResponseStatus, handleAddResponseNote, handleResetSampleData,
@@ -195,7 +218,7 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
 
   const selectedFormObj = forms.find((f) => f.id === selectedFormId);
 
-  const handleFormSubmission = (
+  const handleFormSubmission = async (
     formData: Record<string, any>,
     submitterName: string,
     submitterEmail: string,
@@ -203,17 +226,14 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
   ) => {
     const targetForm = forms.find((f) => f.id === selectedFormId);
     if (!targetForm) return;
-    const refNumber = Math.floor(1000 + Math.random() * 9000);
-    const newResponseId = `JOK-${new Date().getFullYear()}-${refNumber}`;
-    const newResponse: FormResponse = {
-      id: newResponseId,
+
+    const payload = {
       formId: targetForm.id,
       formTitle: targetForm.title,
-      submittedAt: new Date().toISOString(),
       submitterName,
       submitterEmail,
       submitterPhone,
-      status: 'New',
+      status: 'New' as ResponseStatus,
       notes: [{
         id: `note-${Date.now()}`,
         createdAt: new Date().toISOString(),
@@ -222,8 +242,30 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
       }],
       fieldValues: formData,
     };
-    setResponses((prev) => [newResponse, ...prev]);
-    setActiveSubmittedResponse(newResponse);
+
+    try {
+      const res = await fetch(`${API_BASE}/responses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setResponses((prev) => [saved, ...prev]);
+        setActiveSubmittedResponse(saved);
+        return;
+      }
+    } catch { console.warn('API offline — saving locally.'); }
+
+    // Fallback: local only
+    const refNumber = Math.floor(1000 + Math.random() * 9000);
+    const localResponse: FormResponse = {
+      id: `JOK-${new Date().getFullYear()}-${refNumber}`,
+      submittedAt: new Date().toISOString(),
+      ...payload,
+    };
+    setResponses((prev) => [localResponse, ...prev]);
+    setActiveSubmittedResponse(localResponse);
   };
 
   return (
@@ -254,19 +296,19 @@ function PublicPage({ appState }: { appState: ReturnType<typeof useAppState> }) 
           />
         )}
       </main>
-      <footer className="bg-[#131B2E] text-slate-400 py-10 px-4 sm:px-6 lg:px-8 border-t border-slate-800">
+      <footer style={{ background: '#1B2A5C', borderTop: '1px solid rgba(255,255,255,0.08)' }} className="py-10 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-center md:text-left">
           <div>
-            <img src={logoImg} alt="Jokdel Royal" className="h-20 w-auto object-contain brightness-0 invert" />
-            <p className="text-slate-400 mt-0.5">{settings.tagline}</p>
+            <div className="bg-white inline-flex rounded-xl px-3 py-2">
+              <img src={letterheadLogo} alt="Jokdel Royal" style={{ height: '40px', objectFit: 'contain' }} />
+            </div>
+            <p className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>{settings.tagline}</p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
             <p>{settings.address}</p>
             <p>Tel: {settings.phone} | Email: {settings.email}</p>
           </div>
-          <div>
-            <p className="text-slate-600 text-[10px]">&copy; {new Date().getFullYear()} Jokdel Royal. All rights reserved.</p>
-          </div>
+          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px' }}>&copy; {new Date().getFullYear()} Jokdel Royal. All rights reserved.</p>
         </div>
       </footer>
     </div>

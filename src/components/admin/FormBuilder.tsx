@@ -46,7 +46,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
         id: 'f-1',
         type: 'text',
         label: 'Full Name',
-        placeholder: 'e.g. John Doe',
+        placeholder: 'Enter full name',
         required: true,
       },
       {
@@ -266,7 +266,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="mt-1 w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-[#131B2E] focus:outline-hidden focus:border-[#131B2E]"
-                placeholder="e.g. Commercial Lease Inquiry"
+                placeholder="Enter form title"
               />
             </div>
 
@@ -432,7 +432,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                             onChange={(e) =>
                               handleUpdateField(field.id, { section: e.target.value })
                             }
-                            placeholder="e.g. Section A: Personal Details"
+                            placeholder="Enter section heading (e.g. Section A: Personal Details)"
                             className="mt-1 w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs"
                           />
                         </div>

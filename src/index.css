@@ -1,28 +1,183 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --navy: #131B2E;
-    --wine: #6E1E1E;
-    --bg: #F9FAFB;
-  }
-
-  body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background-color: var(--bg);
-    color: var(--navy);
-  }
-
-  .font-serif {
-    font-family: 'Playfair Display', Georgia, serif;
-  }
+/* ─── Jokdel Royal Design System ──────────────────────────────────────────── */
+:root {
+  --jr-navy:       #1B2A5C;  /* Primary — Dark Navy Blue */
+  --jr-navy-dark:  #111c3e;  /* Deeper Navy for hover states */
+  --jr-navy-light: #243470;  /* Lighter navy for accents */
+  --jr-white:      #FFFFFF;
+  --jr-off-white:  #F7F8FA;  /* Page backgrounds */
+  --jr-burgundy:   #8B1A2A;  /* Accent Red / Burgundy */
+  --jr-burgundy-dark: #6a1320;
+  --jr-gold:       #B8962E;  /* Royal Gold */
+  --jr-gold-light: #d4ae4a;
+  --jr-slate:      #64748b;  /* Muted text */
+  --jr-slate-light:#f1f3f5;  /* Light backgrounds */
+  --jr-border:     #e2e6ec;  /* Subtle borders */
+  --jr-shadow:     0 1px 3px rgba(27, 42, 92, 0.08), 0 1px 2px rgba(27, 42, 92, 0.06);
+  --jr-shadow-md:  0 4px 12px rgba(27, 42, 92, 0.1), 0 2px 4px rgba(27, 42, 92, 0.06);
 }
 
-.status-tag {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
+/* ─── Reset & Base ───────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1e293b;
+  background-color: var(--jr-off-white);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────── */
+h1, h2, h3, .font-serif {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--jr-slate-light); }
+::-webkit-scrollbar-thumb { background: #c2cbd8; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--jr-navy); }
+
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ─── Focus States ───────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--jr-navy);
+  outline-offset: 2px;
+}
+
+/* ─── Form Inputs — Global ───────────────────────────────────────────────── */
+input, textarea, select {
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--jr-navy) !important;
+  box-shadow: 0 0 0 3px rgba(27, 42, 92, 0.1) !important;
+  outline: none;
+}
+
+/* ─── Buttons — Global ───────────────────────────────────────────────────── */
+button { font-family: 'Inter', sans-serif; cursor: pointer; }
+
+/* ─── Utility Classes ────────────────────────────────────────────────────── */
+.jr-navy    { color: var(--jr-navy); }
+.jr-gold    { color: var(--jr-gold); }
+.jr-burgundy { color: var(--jr-burgundy); }
+.bg-jr-navy { background-color: var(--jr-navy); }
+.bg-jr-burgundy { background-color: var(--jr-burgundy); }
+.bg-jr-gold { background-color: var(--jr-gold); }
+
+/* ─── Card styles ────────────────────────────────────────────────────────── */
+.jr-card {
+  background: white;
+  border: 1px solid var(--jr-border);
+  border-radius: 12px;
+  box-shadow: var(--jr-shadow);
+}
+
+/* ─── Section divider ───────────────────────────────────────────────────── */
+.jr-section-heading {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--jr-navy);
+  padding: 6px 12px;
+  background: rgba(27, 42, 92, 0.05);
+  border-left: 3px solid var(--jr-navy);
+  border-radius: 0 6px 6px 0;
+  margin: 20px 0 14px;
 }
+
+/* ─── Signature Canvas ───────────────────────────────────────────────────── */
+.signature-canvas {
+  border: 2px dashed var(--jr-border);
+  border-radius: 8px;
+  cursor: crosshair;
+  touch-action: none;
+  background: #fafbfc;
+  width: 100%;
+  max-width: 520px;
+}
+
+.signature-canvas:hover {
+  border-color: var(--jr-navy);
+}
+
+/* ─── Print / Letterhead PDF ─────────────────────────────────────────────── */
+@media print {
+  body { background: white !important; }
+
+  .no-print { display: none !important; }
+
+  .print-only { display: block !important; }
+
+  .letterhead-page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 20mm 20mm 15mm 20mm;
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 11pt;
+    color: #1a1a2e;
+    background: white;
+    position: relative;
+  }
+
+  .letterhead-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #1B2A5C;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+
+  .letterhead-watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 72pt;
+    font-weight: 900;
+    color: rgba(27, 42, 92, 0.05);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 0;
+    letter-spacing: 0.1em;
+  }
+
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border: 1px solid #d0d5e0; padding: 5px 8px; font-size: 9pt; vertical-align: top; }
+  th { background: #f0f3f8; font-weight: 600; }
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes checkPop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in-up { animation: fadeInUp 0.35s ease forwards; }
+.animate-check-pop  { animation: checkPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
